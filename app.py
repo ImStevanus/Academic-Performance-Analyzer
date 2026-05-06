@@ -7,14 +7,15 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 
 # --- 1. KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="Shopper Segment AI Pro", layout="wide")
+st.set_page_config(page_title="Shopper AI Analyzer", layout="wide")
 
-# Custom CSS untuk gaya profesional
+# Gaya Visual Pro
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     .stMetric { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .feature-box { background-color: #e9ecef; padding: 15px; border-radius: 8px; border-left: 5px solid #007bff; margin-bottom: 10px; }
+    .explanation-box { background-color: #ffffff; padding: 20px; border-radius: 10px; border-left: 5px solid #007bff; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    h3 { color: #1f77b4; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -26,158 +27,116 @@ def load_data(file):
 def preprocess_data(df):
     df_clean = df.copy()
     le = LabelEncoder()
-    # Mengonversi kolom kategori untuk keperluan analisis internal
     for col in ['Month', 'VisitorType', 'Weekend', 'Revenue']:
         df_clean[col] = le.fit_transform(df_clean[col])
     return df_clean
 
 # --- 3. SIDEBAR ---
-st.sidebar.title("🎮 Panel Kontrol AI")
-uploaded_file = st.sidebar.file_uploader("Upload Dataset (CSV)", type=["csv"])
-st.sidebar.info("Gunakan dataset 'Online Shoppers Intention' untuk hasil terbaik.")
+st.sidebar.title("🎮 Kontrol Sistem")
+uploaded_file = st.sidebar.file_uploader("Upload Dataset CSV", type=["csv"])
 
 # --- 4. MAIN CONTENT ---
 st.title("🛍️ Online Shoppers Segment Analyzer")
-st.markdown("Sistem Cerdas berbasis *Machine Learning* untuk segmentasi perilaku pelanggan e-commerce.")
+st.markdown("Sistem Cerdas Analisis Perilaku Belanja untuk Strategi Pemasaran Berbasis Data.")
 
 if uploaded_file is not None:
     data = load_data(uploaded_file)
     df_numeric = preprocess_data(data)
 
-    tab1, tab2, tab3 = st.tabs(["📊 Eksplorasi & Edukasi", "🤖 Mesin Prediksi AI", "💡 Insight Perbandingan"])
+    tab1, tab2, tab3 = st.tabs(["📊 1. Eksplorasi Data", "🤖 2. Logika Mesin AI", "💡 3. Insight Strategis"])
 
     # --- TAB 1: EKSPLORASI & EDUKASI ---
     with tab1:
-        st.subheader("🔍 Memahami Variabel yang Dibandingkan")
+        st.subheader("📍 Memahami Variabel Input")
         st.markdown("""
-        Sebelum melakukan segmentasi, sistem membandingkan perilaku pengunjung berdasarkan metrik utama. 
-        Berikut adalah penjelasan fitur yang digunakan dalam perbandingan:
-        """)
-        
-        col_ed1, col_ed2 = st.columns(2)
-        with col_ed1:
-            st.markdown("""
-            <div class='feature-box'>
-            <b>1. PageValues vs Revenue</b><br>
-            Membandingkan nilai halaman terhadap hasil transaksi. <i>PageValues</i> adalah prediktor terkuat untuk mengetahui apakah seseorang akan membeli.
-            </div>
-            <div class='feature-box'>
-            <b>2. Bounce Rates vs Exit Rates</b><br>
-            Membandingkan seberapa cepat pengunjung meninggalkan situs. Ini membantu AI mendeteksi pengunjung yang 'hanya mampir'.
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col_ed2:
-            st.markdown("""
-            <div class='feature-box'>
-            <b>3. Product Related Duration</b><br>
-            Waktu yang dihabiskan di halaman produk. Semakin lama durasinya, semakin tinggi minat belanja mereka.
-            </div>
-            <div class='feature-box'>
-            <b>4. Visitor Type</b><br>
-            Membandingkan perilaku antara pengunjung baru dan pelanggan lama (Returning Visitor).
-            </div>
-            """, unsafe_allow_html=True)
+        <div class='explanation-box'>
+        <b>Apa yang kita analisis?</b><br>
+        Sistem ini membandingkan interaksi pengunjung. Fitur utama yang dianalisis adalah:
+        <ul>
+            <li><b>PageValues:</b> Seberapa bernilai halaman yang dikunjungi terhadap potensi pembelian.</li>
+            <li><b>Bounce Rates:</b> Persentase pengunjung yang 'Mental' (langsung keluar) dari situs.</li>
+            <li><b>Product Duration:</b> Menunjukkan intensitas minat pengunjung terhadap katalog produk.</li>
+        </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.divider()
-        
-        # Visualisasi Distribusi
         c1, c2 = st.columns(2)
         with c1:
-            st.write("**Distribusi Konversi Transaksi**")
-            fig_pie = px.pie(data, names='Revenue', hole=0.4, color_discrete_sequence=px.colors.sequential.RdBu)
-            st.plotly_chart(fig_pie, use_container_width=True)
+            st.write("**Perbandingan Konversi (Revenue)**")
+            st.plotly_chart(px.pie(data, names='Revenue', hole=0.4), use_container_width=True)
         with c2:
-            st.write("**Hubungan Page Value & Niat Beli**")
-            fig_box = px.box(data, x='Revenue', y='PageValues', color='Revenue')
-            st.plotly_chart(fig_box, use_container_width=True)
+            st.write("**Sebaran Page Value terhadap Exit Rates**")
+            st.plotly_chart(px.scatter(data, x='PageValues', y='ExitRates', color='Revenue', opacity=0.5), use_container_width=True)
 
-    # --- TAB 2: MESIN PREDIKSI AI ---
+    # --- TAB 2: LOGIKA MESIN AI ---
     with tab2:
-        st.subheader("⚙️ Proses Training K-Means")
-        
-        # Fitur untuk dibandingan dalam Clustering
+        st.subheader("⚙️ Bagaimana AI Mengelompokkan Data?")
+        st.markdown("""
+        <div class='explanation-box'>
+        <b>Proses Logika K-Means:</b><br>
+        1. <b>Scaling:</b> AI menyamakan skala data (misal: durasi ribuan detik vs bounce rate 0.01) agar adil.<br>
+        2. <b>Elbow Method:</b> Mencari jumlah kelompok (K) terbaik agar tidak terlalu banyak atau sedikit.<br>
+        3. <b>Iterasi:</b> Mesin menghitung jarak terdekat antar data untuk menentukan siapa yang memiliki 'sifat' serupa.
+        </div>
+        """, unsafe_allow_html=True)
+
         features = ['Administrative_Duration', 'Informational_Duration', 'ProductRelated_Duration', 'BounceRates', 'ExitRates', 'PageValues']
-        selected = st.multiselect("Pilih Fitur untuk Dibandingkan oleh AI:", features, default=['ProductRelated_Duration', 'BounceRates', 'PageValues'])
+        selected = st.multiselect("Pilih Fitur yang Akan Dibandingkan AI:", features, default=['ProductRelated_Duration', 'BounceRates', 'PageValues'])
 
         if len(selected) >= 2:
             X = df_numeric[selected]
-            scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X)
+            X_scaled = StandardScaler().fit_transform(X)
 
-            # Optimasi K
-            distortions = []
-            for k in range(1, 11):
-                km = KMeans(n_clusters=k, n_init=10, random_state=42)
-                km.fit(X_scaled)
-                distortions.append(km.inertia_)
-            
-            st.write("**Grafik Elbow (Mencari K Optimal)**")
+            # Elbow Plot
+            distortions = [KMeans(n_clusters=k, n_init=10, random_state=42).fit(X_scaled).inertia_ for k in range(1, 11)]
+            st.write("**Visualisasi Optimalisasi (Elbow Method)**")
             st.plotly_chart(px.line(x=list(range(1, 11)), y=distortions, markers=True), use_container_width=True)
 
-            k_val = st.slider("Tentukan Jumlah Kelompok:", 2, 6, 3)
-            model = KMeans(n_clusters=k_val, n_init=10, random_state=42)
-            data['Cluster'] = model.fit_predict(X_scaled)
-
-            st.success("Analisis Cluster Selesai!")
+            k_val = st.slider("Atur Jumlah Cluster (K):", 2, 6, 3)
+            data['Cluster'] = KMeans(n_clusters=k_val, n_init=10, random_state=42).fit_predict(X_scaled)
             
-            st.write("**Hasil Perbandingan Visual antar Cluster**")
-            fig_cluster = px.scatter(data, x=selected[0], y=selected[1], color='Cluster', 
-                                   hover_data=['VisitorType'], size='PageValues', opacity=0.6)
-            st.plotly_chart(fig_cluster, use_container_width=True)
+            st.write("**Visualisasi Hasil Logika Mesin**")
+            st.plotly_chart(px.scatter(data, x=selected[0], y=selected[1], color='Cluster', symbol='Revenue'), use_container_width=True)
         else:
             st.warning("Pilih minimal 2 fitur.")
 
-    # --- TAB 3: INSIGHT PERBANDINGAN ---
+    # --- TAB 3: INSIGHT STRATEGIS ---
     with tab3:
         if 'Cluster' in data.columns:
-            st.subheader("💡 Perbandingan Karakteristik Antar Segmen")
-            
-            # Analisis Statistik
-            stats = data.groupby('Cluster')[selected].mean()
-            
-            st.write("**Tabel Perbandingan Rata-rata Skor:**")
-            st.dataframe(stats.style.highlight_max(axis=0, color='#d4edda').highlight_min(axis=0, color='#f8d7da'), use_container_width=True)
-            
+            st.subheader("💡 Apa Makna Angka Ini Bagi Bisnis?")
             st.markdown("""
-            **Cara Membaca Perbandingan:**
-            - Kolom **Hijau**: Nilai paling unggul di kelompok tersebut.
-            - Kolom **Merah**: Nilai terendah (titik lemah kelompok).
-            """)
+            <div class='explanation-box'>
+            <b>Hasil Perbandingan Antar Segmen:</b><br>
+            Tabel di bawah membandingkan nilai rata-rata tiap kelompok. Kita mencari 
+            <b>karakter dominan</b> (angka tertinggi) untuk menentukan strategi promosi yang berbeda tiap segmen.
+            </div>
+            """, unsafe_allow_html=True)
 
-            st.divider()
-            
-            # Narasi Perbandingan Cerdas
-            st.subheader("📝 Ringkasan Strategis")
-            
-            # Cari cluster terbaik & terburuk
-            best_cluster = stats['PageValues'].idxmax()
-            worst_cluster = stats['BounceRates'].idxmax()
+            stats = data.groupby('Cluster')[selected].mean()
+            st.dataframe(stats.style.highlight_max(axis=0, color='#d4edda').highlight_min(axis=0, color='#f8d7da'), use_container_width=True)
 
-            c_res1, c_res2 = st.columns(2)
-            with c_res1:
-                st.success(f"✅ **Pemenang (Cluster {best_cluster})**")
-                st.write(f"Cluster ini memiliki perbandingan Page Value tertinggi ({stats.loc[best_cluster, 'PageValues']:.2f}). Mereka adalah target iklan utama.")
-            
-            with c_res2:
-                st.error(f"⚠️ **Risiko (Cluster {worst_cluster})**")
-                st.write(f"Cluster ini memiliki Bounce Rate tertinggi. Sistem membandingkan bahwa mereka tidak tertarik dengan UI/UX saat ini.")
-
-            # Radar Chart untuk perbandingan visual (Advanced)
-            st.write("**Visualisasi Radar (Perbandingan Kekuatan Segmen)**")
+            st.markdown("### 📊 Radar Perbandingan Kekuatan")
             fig_radar = go.Figure()
             for i in range(k_val):
-                fig_radar.add_trace(go.Scatterpolar(
-                    r=stats.iloc[i].values,
-                    theta=selected,
-                    fill='toself',
-                    name=f'Segmen {i}'
-                ))
+                fig_radar.add_trace(go.Scatterpolar(r=stats.iloc[i].values, theta=selected, fill='toself', name=f'Segmen {i}'))
             st.plotly_chart(fig_radar, use_container_width=True)
 
+            st.markdown("---")
+            st.subheader("📝 Rekomendasi Tindakan")
+            
+            # Cari cluster terbaik & terburuk secara dinamis
+            best_id = stats['PageValues'].idxmax()
+            worst_id = stats['BounceRates'].idxmax()
+
+            col_res1, col_res2 = st.columns(2)
+            with col_res1:
+                st.success(f"**Segmen {best_id}: Potensi Cuan Tinggi**")
+                st.write("Segmen ini memiliki Page Value tertinggi. Strategi: Berikan diskon waktu terbatas (Flash Sale) untuk mendorong penyelesaian transaksi segera.")
+            with col_res2:
+                st.error(f"**Segmen {worst_id}: Risiko Tinggi**")
+                st.write("Segmen ini sering mental (Bounce Rate tinggi). Strategi: Perbaiki konten halaman landing atau tawarkan bantuan Live Chat otomatis.")
         else:
-            st.info("Lakukan training di Tab 2 terlebih dahulu.")
+            st.info("Selesaikan langkah di Tab 2.")
 
 else:
-    st.image("https://images.unsplash.com/photo-1551288049-bbbda536339a?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80", use_container_width=True)
-    st.info("Silakan upload dataset untuk memulai perbandingan cerdas.")
+    st.info("Silakan unggah dataset di sidebar untuk memulai.")
