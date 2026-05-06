@@ -2,148 +2,157 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-import matplotlib.pyplot as plt
 
-# --- KONFIGURASI HALAMAN ---
+# --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Shopper Segment AI", layout="wide")
 
-# --- CUSTOM CSS ---
+# Custom CSS untuk mempercantik tampilan
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .main { background-color: #f8f9fa; }
+    .stAlert { border-radius: 10px; }
+    .stMetric { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNGSI HELPER ---
+# --- 2. FUNGSI BACKEND ---
 @st.cache_data
 def load_data(file):
     return pd.read_csv(file)
 
 def preprocess_data(df):
     df_clean = df.copy()
-    # Mengubah kolom kategorikal menjadi angka
     le = LabelEncoder()
-    cat_cols = ['Month', 'VisitorType', 'Weekend', 'Revenue']
-    for col in cat_cols:
+    # Mengonversi kolom kategori agar bisa dibaca model AI jika diperlukan
+    for col in ['Month', 'VisitorType', 'Weekend', 'Revenue']:
         df_clean[col] = le.fit_transform(df_clean[col])
     return df_clean
 
-# --- SIDEBAR: INPUT DATA ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3081/3081559.png", width=100)
-st.sidebar.title("Kontrol Sistem")
-uploaded_file = st.sidebar.file_uploader("Upload Dataset (CSV)", type=["csv"])
+# --- 3. SIDEBAR ---
+st.sidebar.title("🎮 Menu Kontrol")
+st.sidebar.markdown("Unggah dataset dan atur parameter model di sini.")
+uploaded_file = st.sidebar.file_uploader("Upload 'online_shoppers_intention.csv'", type=["csv"])
 
-# --- MAIN CONTENT ---
+# --- 4. MAIN CONTENT ---
 st.title("🛍️ Online Shoppers Segment Analyzer")
-st.markdown("Sistem Cerdas Analisis Segmentasi Pelanggan untuk Optimasi Strategi Marketing.")
+st.markdown("""
+Sistem ini menggunakan **Artificial Intelligence (Unsupervised Learning)** untuk memahami pola perilaku pengunjung website e-commerce secara otomatis.
+""")
 
 if uploaded_file is not None:
+    # Load Data
     data = load_data(uploaded_file)
     df_numeric = preprocess_data(data)
 
-    # Tab menu
-    tab1, tab2, tab3 = st.tabs(["📊 Eksplorasi Data", "🤖 Training AI", "💡 Insight Bisnis"])
+    # Tabs untuk navigasi
+    tab1, tab2, tab3 = st.tabs(["📊 Eksplorasi Data", "🤖 Training Model AI", "💡 Insight Strategis"])
 
+    # --- TAB 1: EKSPLORASI DATA ---
     with tab1:
-        st.subheader("Preview Dataset")
-        st.dataframe(data.head(10), use_container_width=True)
+        st.subheader("Ringkasan Statistik")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Sampel", f"{data.shape[0]}")
+        col2.metric("Rata-rata PageValue", f"{data['PageValues'].mean():.2f}")
+        col3.metric("Bounce Rate Rata-rata", f"{data['BounceRates'].mean():.3f}")
+        col4.metric("Konversi (Revenue)", f"{(data['Revenue'].sum()/len(data)*100):.1f}%")
+
+        st.markdown("---")
+        c1, c2 = st.columns(2)
         
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Data", f"{data.shape[0]} baris")
-        col2.metric("Total Fitur", f"{data.shape[1]} kolom")
-        col3.metric("Rata-rata PageValue", f"{data['PageValues'].mean():.2f}")
+        with c1:
+            st.write("**Distribusi Niat Beli (Revenue)**")
+            fig_pie = px.pie(data, names='Revenue', hole=0.4, color_discrete_sequence=['#ef553b', '#636efa'])
+            st.plotly_chart(fig_pie, use_container_width=True)
+            st.info("**Penjelasan:** Sebagian besar pengunjung (False) tidak melakukan transaksi. AI akan membantu mencari segmen kecil yang berpotensi beli (True).")
 
-        st.subheader("Distribusi Niat Beli (Revenue)")
-        fig_rev = px.pie(data, names='Revenue', hole=0.4, color_discrete_sequence=px.colors.sequential.RdBu)
-        st.plotly_chart(fig_rev)
+        with c2:
+            st.write("**Bounce Rates vs Exit Rates**")
+            fig_scatter = px.scatter(data, x='BounceRates', y='ExitRates', color='Revenue', opacity=0.4)
+            st.plotly_chart(fig_scatter, use_container_width=True)
+            st.info("**Penjelasan:** Area kanan atas menunjukkan 'zona kebocoran' di mana pengunjung cepat meninggalkan situs tanpa interaksi.")
 
+    # --- TAB 2: TRAINING MODEL AI ---
     with tab2:
-        st.subheader("Konfigurasi Model K-Means")
+        st.subheader("Konfigurasi Mesin K-Means")
         
-        # Pemilihan Fitur
-        all_features = df_numeric.columns.tolist()
-        selected_features = st.multiselect(
-            "Pilih fitur untuk segmentasi:", 
-            all_features, 
-            default=['Administrative_Duration', 'ProductRelated_Duration', 'BounceRates', 'PageValues']
-        )
+        # Fitur yang digunakan untuk Clustering
+        features = ['Administrative_Duration', 'Informational_Duration', 'ProductRelated_Duration', 'BounceRates', 'ExitRates', 'PageValues']
+        selected = st.multiselect("Pilih Fitur Analisis:", features, default=['ProductRelated_Duration', 'BounceRates', 'PageValues'])
 
-        if len(selected_features) >= 2:
-            X = df_numeric[selected_features]
-            
-            # Scalling
+        if len(selected) >= 2:
+            # Preprocessing & Scaling
+            X = df_numeric[selected]
             scaler = StandardScaler()
             X_scaled = scaler.fit_transform(X)
 
-            # Elbow Method Otomatis
-            st.write("🔍 Mencari Jumlah Cluster Optimal (Elbow Method)...")
+            # Elbow Method (Visualisasi Optimasi)
             distortions = []
-            K_range = range(1, 11)
-            for k in K_range:
-                kmeanModel = KMeans(n_clusters=k, n_init=10, random_state=42)
-                kmeanModel.fit(X_scaled)
-                distortions.append(kmeanModel.inertia_)
-
-            fig_elbow = px.line(x=list(K_range), y=distortions, markers=True, title="Elbow Method")
-            fig_elbow.update_layout(xaxis_title="Jumlah Cluster (k)", yaxis_title="Inertia")
+            for k in range(1, 11):
+                km = KMeans(n_clusters=k, n_init=10, random_state=42)
+                km.fit(X_scaled)
+                distortions.append(km.inertia_)
+            
+            st.write("**Optimasi Jumlah Cluster (Elbow Method)**")
+            fig_elbow = px.line(x=list(range(1, 11)), y=distortions, markers=True)
+            fig_elbow.update_layout(xaxis_title="Jumlah Cluster", yaxis_title="Inertia (Error)")
             st.plotly_chart(fig_elbow, use_container_width=True)
+            st.caption("Pilih jumlah cluster di mana grafik mulai melandai (membentuk 'siku').")
 
-            k_input = st.slider("Tentukan Jumlah Cluster:", 2, 6, 3)
-
-            # Proses Clustering
-            model = KMeans(n_clusters=k_input, n_init=10, random_state=42)
+            # Input K
+            k_val = st.slider("Tentukan Jumlah Kelompok (Cluster):", 2, 6, 3)
+            
+            # Model Fit
+            model = KMeans(n_clusters=k_val, n_init=10, random_state=42)
             data['Cluster'] = model.fit_predict(X_scaled)
 
-            st.success(f"Model berhasil dilatih dengan {k_input} cluster!")
-
-            # Visualisasi Cluster
-            st.subheader("Visualisasi Sebaran Segmen")
-            fig_cluster = px.scatter(
-                data, 
-                x=selected_features[0], 
-                y=selected_features[1], 
-                color='Cluster',
-                hover_data=['VisitorType', 'Month', 'Revenue'],
-                title=f"Cluster berdasarkan {selected_features[0]} & {selected_features[1]}"
-            )
-            st.plotly_chart(fig_cluster, use_container_width=True)
+            st.success(f"AI berhasil mengelompokkan pengunjung menjadi {k_val} segmen!")
+            
+            # Plot Hasil Cluster
+            st.write("**Visualisasi Hasil Segmentasi**")
+            fig_res = px.scatter(data, x=selected[0], y=selected[1], color='Cluster', 
+                               hover_data=['VisitorType', 'Revenue'], symbol='Revenue')
+            st.plotly_chart(fig_res, use_container_width=True)
         else:
-            st.warning("Pilih minimal 2 fitur untuk memulai clustering.")
+            st.warning("Silakan pilih minimal 2 fitur untuk memulai proses AI.")
 
+    # --- TAB 3: INSIGHT STRATEGIS ---
     with tab3:
         if 'Cluster' in data.columns:
-            st.subheader("Analisis Karakteristik Per Segmen")
+            st.subheader("Interpretasi Segmen & Strategi Bisnis")
             
-            # Hitung rata-rata per cluster
-            cluster_analysis = data.groupby('Cluster')[selected_features].mean()
-            st.write(cluster_analysis)
+            # Tabel Rata-rata per Cluster
+            stats = data.groupby('Cluster')[selected].mean()
+            st.write("**Karakteristik Tiap Kelompok:**")
+            st.dataframe(stats.style.highlight_max(axis=0, color='#d4edda'))
 
-            # Penjelasan Cerdas (Interpretasi)
-            st.markdown("### 📝 Interpretasi Hasil")
-            for i in range(k_input):
-                with st.expander(f"Analisis Segmen {i}"):
-                    row = cluster_analysis.iloc[i]
-                    if row['PageValues'] > data['PageValues'].mean():
-                        st.write("**Profil:** High Value Customer")
-                        st.write("**Saran:** Berikan program loyalitas atau preview produk eksklusif.")
-                    elif row['BounceRates'] > data['BounceRates'].mean():
-                        st.write("**Profil:** Uninterested/Window Shopper")
-                        st.write("**Saran:** Tingkatkan UI/UX atau berikan pop-up diskon instan.")
+            # Narasi Cerdas Otomatis
+            st.markdown("### 💡 Rekomendasi Marketing")
+            cols = st.columns(k_val)
+            
+            for i in range(k_val):
+                with cols[i]:
+                    st.markdown(f"#### Segmen {i}")
+                    c_data = stats.iloc[i]
+                    
+                    # Logika Penentuan Profil Berdasarkan Data
+                    if c_data['PageValues'] > data['PageValues'].mean() * 1.2:
+                        st.success("💎 **VIP Buyer**")
+                        st.write("Pengunjung ini sangat berharga. Berikan promo 'Free Shipping' untuk memastikan checkout.")
+                    elif c_data['BounceRates'] > data['BounceRates'].mean():
+                        st.error("🚪 **Lost Traffic**")
+                        st.write("Pengunjung yang langsung pergi. Perlu optimasi kecepatan loading atau desain landing page.")
+                    elif c_data['ProductRelated_Duration'] > data['ProductRelated_Duration'].mean():
+                        st.warning("🕵️ **Researcher**")
+                        st.write("Mereka lama melihat produk tapi ragu. Tampilkan ulasan produk (review) atau testimoni.")
                     else:
-                        st.write("**Profil:** Regular Visitor")
-                        st.write("**Saran:** Kirimkan newsletter berkala melalui email marketing.")
+                        st.info("🚶 **Casual Visitor**")
+                        st.write("Pengunjung umum. Pertahankan dengan konten menarik agar mereka kembali lagi.")
         else:
-            st.info("Selesaikan training di Tab 'Training AI' terlebih dahulu.")
+            st.info("Selesaikan langkah di tab 'Training Model AI' untuk melihat hasil analisis.")
 
 else:
-    # Tampilan awal jika belum upload file
-    st.image("https://images.unsplash.com/photo-1551288049-bbbda536339a?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80", use_container_width=True)
-    st.info("Silakan upload file 'online_shoppers_intention.csv' melalui sidebar untuk memulai analisis.")
-
-# --- FOOTER ---
-st.divider()
-st.caption("UAS Sistem Cerdas - Online Shoppers Segment Analyzer - 2024")
+    # Tampilan jika file belum diunggah
+    st.image("https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80")
+    st.warning("Menunggu dataset... Silakan unggah file CSV di sidebar untuk mengaktifkan sistem.")
