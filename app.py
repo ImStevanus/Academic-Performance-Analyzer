@@ -1,142 +1,76 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.decomposition import PCA
 
-# --- 1. KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="Shopper AI Analyzer", layout="wide")
+# --- KONFIGURASI HALAMAN ---
+st.set_page_config(page_title="Segmentasi Produk App", layout="wide")
 
-# Gaya Visual Pro
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .explanation-box { background-color: #ffffff; padding: 20px; border-radius: 10px; border-left: 5px solid #007bff; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    h3 { color: #1f77b4; }
-    </style>
-    """, unsafe_allow_html=True)
+st.title("Laporan Proyek: Segmentasi Produk (Clustering)")
+st.write("Aplikasi ini mengelompokkan produk berdasarkan kategori dan tag menggunakan algoritma K-Means.")
 
-# --- 2. FUNGSI BACKEND ---
-@st.cache_data
-def load_data(file):
-    return pd.read_csv(file)
+# --- LOAD DATA ---
+@st.cache_data # Cache agar data tidak di-load ulang setiap interaksi
+def load_data():
+    df = pd.read_csv('data_set.csv')
+    # Preprocessing: Isi nilai kosong
+    tag_cols = ['Category', 'tag1', 'tag2', 'tag3', 'tag4', 'tag5']
+    df[tag_cols] = df[tag_cols].fillna('')
+    # Gabungkan fitur
+    df['combined_features'] = df[tag_cols].apply(lambda x: ' '.join(x), axis=1)
+    return df
 
-def preprocess_data(df):
-    df_clean = df.copy()
-    le = LabelEncoder()
-    for col in ['Month', 'VisitorType', 'Weekend', 'Revenue']:
-        df_clean[col] = le.fit_transform(df_clean[col])
-    return df_clean
+try:
+    df = load_data()
+    
+    # --- SIDEBAR: KONTROL MODEL ---
+    st.sidebar.header("Pengaturan Model")
+    k_value = st.sidebar.slider("Pilih Jumlah Cluster (k)", min_value=2, max_value=20, value=10)
+    
+    # --- PROSES CLUSTERING ---
+    vectorizer = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = vectorizer.fit_transform(df['combined_features'])
+    
+    model = KMeans(n_clusters=k_value, random_state=42, n_init=10)
+    df['Cluster'] = model.fit_predict(tfidf_matrix)
+    
+    # --- LAYOUT UTAMA ---
+    col1, col2 = st.columns([1, 1])
 
-# --- 3. SIDEBAR ---
-st.sidebar.title("🎮 Kontrol Sistem")
-uploaded_file = st.sidebar.file_uploader("Upload Dataset CSV", type=["csv"])
+    with col1:
+        st.subheader("Visualisasi Cluster (PCA)")
+        pca = PCA(n_components=2)
+        coords = pca.fit_transform(tfidf_matrix.toarray())
+        df['pca_1'] = coords[:, 0]
+        df['pca_2'] = coords[:, 1]
+        
+        fig, ax = plt.subplots(figsize=(10, 7))
+        sns.scatterplot(x='pca_1', y='pca_2', hue='Cluster', data=df, palette='viridis', ax=ax)
+        st.pyplot(fig)
 
-# --- 4. MAIN CONTENT ---
-st.title("🛍️ Online Shoppers Segment Analyzer")
-st.markdown("Sistem Cerdas Analisis Perilaku Belanja untuk Strategi Pemasaran Berbasis Data.")
+    with col2:
+        st.subheader("Filter Data berdasarkan Cluster")
+        selected_cluster = st.selectbox("Pilih Cluster untuk ditampilkan:", sorted(df['Cluster'].unique()))
+        filtered_df = df[df['Cluster'] == selected_cluster]
+        st.write(f"Menampilkan {len(filtered_df)} produk dalam Cluster {selected_cluster}")
+        st.dataframe(filtered_df[['Product Name', 'Category', 'tag1', 'tag2', 'tag3']], use_container_width=True)
 
-if uploaded_file is not None:
-    data = load_data(uploaded_file)
-    df_numeric = preprocess_data(data)
+    # --- TABEL DATA LENGKAP ---
+    st.divider()
+    st.subheader("Seluruh Data Tersegmentasi")
+    st.dataframe(df.drop(columns=['combined_features', 'pca_1', 'pca_2']), use_container_width=True)
 
-    tab1, tab2, tab3 = st.tabs(["📊 1. Eksplorasi Data", "🤖 2. Logika Mesin AI", "💡 3. Insight Strategis"])
+    # --- DOWNLOAD HASIL ---
+    csv = df.drop(columns=['combined_features', 'pca_1', 'pca_2']).to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download Data Segmentasi (CSV)",
+        data=csv,
+        file_name='segmented_products_output.csv',
+        mime='text/csv',
+    )
 
-    # --- TAB 1: EKSPLORASI & EDUKASI ---
-    with tab1:
-        st.subheader("📍 Memahami Variabel Input")
-        st.markdown("""
-        <div class='explanation-box'>
-        <b>Apa yang kita analisis?</b><br>
-        Sistem ini membandingkan interaksi pengunjung. Fitur utama yang dianalisis adalah:
-        <ul>
-            <li><b>PageValues:</b> Seberapa bernilai halaman yang dikunjungi terhadap potensi pembelian.</li>
-            <li><b>Bounce Rates:</b> Persentase pengunjung yang 'Mental' (langsung keluar) dari situs.</li>
-            <li><b>Product Duration:</b> Menunjukkan intensitas minat pengunjung terhadap katalog produk.</li>
-        </ul>
-        </div>
-        """, unsafe_allow_html=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("**Perbandingan Konversi (Revenue)**")
-            st.plotly_chart(px.pie(data, names='Revenue', hole=0.4), use_container_width=True)
-        with c2:
-            st.write("**Sebaran Page Value terhadap Exit Rates**")
-            st.plotly_chart(px.scatter(data, x='PageValues', y='ExitRates', color='Revenue', opacity=0.5), use_container_width=True)
-
-    # --- TAB 2: LOGIKA MESIN AI ---
-    with tab2:
-        st.subheader("⚙️ Bagaimana AI Mengelompokkan Data?")
-        st.markdown("""
-        <div class='explanation-box'>
-        <b>Proses Logika K-Means:</b><br>
-        1. <b>Scaling:</b> AI menyamakan skala data (misal: durasi ribuan detik vs bounce rate 0.01) agar adil.<br>
-        2. <b>Elbow Method:</b> Mencari jumlah kelompok (K) terbaik agar tidak terlalu banyak atau sedikit.<br>
-        3. <b>Iterasi:</b> Mesin menghitung jarak terdekat antar data untuk menentukan siapa yang memiliki 'sifat' serupa.
-        </div>
-        """, unsafe_allow_html=True)
-
-        features = ['Administrative_Duration', 'Informational_Duration', 'ProductRelated_Duration', 'BounceRates', 'ExitRates', 'PageValues']
-        selected = st.multiselect("Pilih Fitur yang Akan Dibandingkan AI:", features, default=['ProductRelated_Duration', 'BounceRates', 'PageValues'])
-
-        if len(selected) >= 2:
-            X = df_numeric[selected]
-            X_scaled = StandardScaler().fit_transform(X)
-
-            # Elbow Plot
-            distortions = [KMeans(n_clusters=k, n_init=10, random_state=42).fit(X_scaled).inertia_ for k in range(1, 11)]
-            st.write("**Visualisasi Optimalisasi (Elbow Method)**")
-            st.plotly_chart(px.line(x=list(range(1, 11)), y=distortions, markers=True), use_container_width=True)
-
-            k_val = st.slider("Atur Jumlah Cluster (K):", 2, 6, 3)
-            data['Cluster'] = KMeans(n_clusters=k_val, n_init=10, random_state=42).fit_predict(X_scaled)
-            
-            st.write("**Visualisasi Hasil Logika Mesin**")
-            st.plotly_chart(px.scatter(data, x=selected[0], y=selected[1], color='Cluster', symbol='Revenue'), use_container_width=True)
-        else:
-            st.warning("Pilih minimal 2 fitur.")
-
-    # --- TAB 3: INSIGHT STRATEGIS ---
-    with tab3:
-        if 'Cluster' in data.columns:
-            st.subheader("💡 Apa Makna Angka Ini Bagi Bisnis?")
-            st.markdown("""
-            <div class='explanation-box'>
-            <b>Hasil Perbandingan Antar Segmen:</b><br>
-            Tabel di bawah membandingkan nilai rata-rata tiap kelompok. Kita mencari 
-            <b>karakter dominan</b> (angka tertinggi) untuk menentukan strategi promosi yang berbeda tiap segmen.
-            </div>
-            """, unsafe_allow_html=True)
-
-            stats = data.groupby('Cluster')[selected].mean()
-            st.dataframe(stats.style.highlight_max(axis=0, color='#d4edda').highlight_min(axis=0, color='#f8d7da'), use_container_width=True)
-
-            st.markdown("### 📊 Radar Perbandingan Kekuatan")
-            fig_radar = go.Figure()
-            for i in range(k_val):
-                fig_radar.add_trace(go.Scatterpolar(r=stats.iloc[i].values, theta=selected, fill='toself', name=f'Segmen {i}'))
-            st.plotly_chart(fig_radar, use_container_width=True)
-
-            st.markdown("---")
-            st.subheader("📝 Rekomendasi Tindakan")
-            
-            # Cari cluster terbaik & terburuk secara dinamis
-            best_id = stats['PageValues'].idxmax()
-            worst_id = stats['BounceRates'].idxmax()
-
-            col_res1, col_res2 = st.columns(2)
-            with col_res1:
-                st.success(f"**Segmen {best_id}: Potensi Cuan Tinggi**")
-                st.write("Segmen ini memiliki Page Value tertinggi. Strategi: Berikan diskon waktu terbatas (Flash Sale) untuk mendorong penyelesaian transaksi segera.")
-            with col_res2:
-                st.error(f"**Segmen {worst_id}: Risiko Tinggi**")
-                st.write("Segmen ini sering mental (Bounce Rate tinggi). Strategi: Perbaiki konten halaman landing atau tawarkan bantuan Live Chat otomatis.")
-        else:
-            st.info("Selesaikan langkah di Tab 2.")
-
-else:
-    st.info("Silakan unggah dataset di sidebar untuk memulai.")
+except FileNotFoundError:
+    st.error("File 'data_set.csv' tidak ditemukan. Pastikan file ada di folder yang sama dengan app.py")
