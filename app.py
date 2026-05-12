@@ -5,7 +5,7 @@ import seaborn as sns
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-import plotly.express as px # Untuk grafik interaktif
+import plotly.express as px
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -14,43 +14,37 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CUSTOM CSS UNTUK UI ---
-st.markdown("""
-    <style>
-    .main {
-        background-color: #f5f7f9;
-    }
-    .stMetric {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 # --- LOAD & PREPROCESS DATA ---
 @st.cache_data
 def load_and_process():
+    # Membaca data
     df = pd.read_csv('data_set.csv')
-    tag_cols = ['Category', 'tag1', 'tag2', 'tag3', 'tag4', 'tag5']
-    df[tag_cols] = df[tag_cols].fillna('')
-    df['combined_features'] = df[tag_cols].apply(lambda x: ' '.join(x), axis=1)
-    return df, tag_cols
+    
+    # Menghapus kolom duplikat jika ada di file CSV asli
+    df = df.loc[:, ~df.columns.duplicated()]
+    
+    # Daftar kolom fitur
+    cols_to_combine = ['Category', 'tag1', 'tag2', 'tag3', 'tag4', 'tag5']
+    
+    # Pastikan kolom-kolom di atas ada di dataframe
+    existing_cols = [c for c in cols_to_combine if c in df.columns]
+    
+    # Isi nilai kosong dan gabungkan
+    df[existing_cols] = df[existing_cols].fillna('')
+    df['combined_features'] = df[existing_cols].apply(lambda x: ' '.join(x.astype(str)), axis=1)
+    
+    return df, existing_cols
 
 try:
-    df_raw, tag_cols = load_and_process()
+    df_raw, feature_cols = load_and_process()
     df = df_raw.copy()
 
     # --- SIDEBAR ---
     with st.sidebar:
         st.title("⚙️ Kontrol Panel")
-        st.info("Sesuaikan parameter clustering di sini.")
         k_value = st.slider("Jumlah Cluster (k)", 2, 20, 10)
-        
         st.divider()
-        st.subheader("Tentang Sistem")
-        st.caption("Sistem ini menggunakan TF-IDF Vectorization dan K-Means untuk pemetaan produk otomatis.")
+        st.info("Tips: Jika cluster terlihat terlalu menumpuk, coba naikkan nilai K.")
 
     # --- ENGINE CLUSTERING ---
     vectorizer = TfidfVectorizer(stop_words='english')
@@ -60,13 +54,11 @@ try:
 
     # --- HEADER ---
     st.title("📊 Product Segmentation Dashboard")
-    st.write(f"Menampilkan analisis untuk **{len(df)}** produk unik.")
 
     # --- TABS UI ---
     tab1, tab2, tab3 = st.tabs(["📈 Analisis Cluster", "🔍 Pencarian & Filter", "📄 Data Master"])
 
     with tab1:
-        # Metrics Row
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Produk", len(df))
         m2.metric("Jumlah Cluster", k_value)
@@ -78,13 +70,11 @@ try:
             st.subheader("Visualisasi Ruang Produk (PCA 2D)")
             pca = PCA(n_components=2)
             coords = pca.fit_transform(tfidf_matrix.toarray())
-            df_viz = df.copy()
-            df_viz['x'] = coords[:, 0]
-            df_viz['y'] = coords[:, 1]
+            df['pca_1'] = coords[:, 0]
+            df['pca_2'] = coords[:, 1]
             
-            # Menggunakan Plotly agar grafik bisa di-zoom dan interaktif
             fig_pca = px.scatter(
-                df_viz, x='x', y='y', color='Cluster',
+                df, x='pca_1', y='pca_2', color='Cluster',
                 hover_data=['Product Name', 'Category'],
                 template="plotly_white",
                 color_continuous_scale=px.colors.sequential.Viridis
@@ -95,7 +85,7 @@ try:
             st.subheader("Distribusi Cluster")
             cluster_counts = df['Cluster'].value_counts().reset_index()
             cluster_counts.columns = ['Cluster', 'Count']
-            fig_bar = px.bar(cluster_counts, x='Cluster', y='Count', color='Count', color_continuous_scale='Blues')
+            fig_bar = px.bar(cluster_counts, x='Cluster', y='Count', color='Count')
             st.plotly_chart(fig_bar, use_container_width=True)
 
     with tab2:
@@ -106,35 +96,39 @@ try:
             sel_cluster = st.selectbox("Pilih Cluster:", sorted(df['Cluster'].unique()))
             cluster_data = df[df['Cluster'] == sel_cluster]
             
-            # Fitur Baru: Top Keywords dalam Cluster
-            st.write("**Karakteristik Cluster:**")
+            st.write("**Top Keywords dalam Cluster:**")
             words = " ".join(cluster_data['combined_features']).split()
+            # Filter kata pendek
             top_words = pd.Series([w for w in words if len(w) > 3]).value_counts().head(10)
-            st.dataframe(top_words, column_config={"index": "Kata", "0": "Frekuensi"})
+            st.write(top_words)
 
         with c2:
             st.write(f"Daftar Produk di Cluster {sel_cluster}")
-            st.dataframe(cluster_data[['Product Name', 'Category'] + tag_cols[:3]], use_container_width=True)
+            # Menghindari error duplikat kolom dengan memilih kolom secara aman
+            cols_show = ['Product Name', 'Category', 'Cluster']
+            st.dataframe(cluster_data[cols_show], use_container_width=True)
 
         st.divider()
         st.subheader("🔎 Cari Produk")
-        search_query = st.text_input("Masukkan nama produk untuk mengecek clusternya:")
+        search_query = st.text_input("Masukkan nama produk:")
         if search_query:
-            results = df[df['Product Name'].str.contains(search_query, case=False)]
+            # Filter pencarian
+            results = df[df['Product Name'].str.contains(search_query, case=False, na=False)]
             if not results.empty:
                 st.success(f"Ditemukan {len(results)} produk.")
-                st.table(results[['Product Name', 'Category', 'Cluster']])
+                # Tampilkan hasil tanpa duplikasi kolom
+                st.dataframe(results[['Product Name', 'Category', 'Cluster']], use_container_width=True)
             else:
                 st.warning("Produk tidak ditemukan.")
 
     with tab3:
         st.subheader("Seluruh Data Tersegmentasi")
-        st.dataframe(df.drop(columns=['combined_features']), use_container_width=True)
+        # Hapus kolom pembantu sebelum ditampilkan ke user
+        df_display = df.drop(columns=['combined_features', 'pca_1', 'pca_2'], errors='ignore')
+        st.dataframe(df_display, use_container_width=True)
         
-        # Download Section
-        csv = df.to_csv(index=False).encode('utf-8')
+        csv = df_display.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Report (CSV)", data=csv, file_name='report_segmentasi.csv', mime='text/csv')
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
-    st.info("Pastikan file 'data_set.csv' tersedia di direktori yang sama.")
