@@ -10,25 +10,35 @@ from sklearn.metrics import silhouette_score
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Smart Category Assistant Pro", page_icon="🤖", layout="wide")
 
-# URL Google Sheets Anda
-SQL_URL = "https://docs.google.com/spreadsheets/d/1EzAuFcdhr77yDHsO2jwGvYt7wmYBbfAB41LAyOd7nFc/edit?usp=sharing" # <--- GANTI INI
+# URL Google Sheets Stevanus
+SQL_URL = "https://docs.google.com/spreadsheets/d/1EzAuFcdhr77yDHsO2jwGvYt7wmYBbfAB41LAyOd7nFc/edit?usp=sharing"
 
 # --- KONEKSI DATABASE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data_from_gsheets():
-    # Mengambil data dari Google Sheets
-    df = conn.read(spreadsheet=SQL_URL, ttl="0") # ttl="0" agar selalu ambil data terbaru
+    # Mengambil data terbaru (ttl=0 memastikan data tidak basi)
+    df = conn.read(spreadsheet=SQL_URL, ttl="0")
+    
+    # Bersihkan kolom duplikat jika ada
     df = df.loc[:, ~df.columns.duplicated()]
-    cols = ['Category', 'tag1', 'tag2', 'tag3', 'tag4', 'tag5']
-    for col in cols:
+    
+    # Pastikan kolom utama tersedia
+    cols_needed = ['Product Name', 'Category', 'tag1', 'tag2', 'tag3', 'tag4', 'tag5']
+    for col in cols_needed:
         if col not in df.columns:
             df[col] = ""
-    df[cols] = df[cols].fillna('')
-    df['combined_features'] = df[cols].apply(lambda x: ' '.join(x.astype(str)), axis=1)
+    
+    # Pastikan semua data bertipe string untuk diproses AI
+    df[cols_needed] = df[cols_needed].astype(str).replace('nan', '')
+    
+    # Menggabungkan fitur kategori dan tag untuk clustering
+    feature_cols = ['Category', 'tag1', 'tag2', 'tag3', 'tag4', 'tag5']
+    df['combined_features'] = df[feature_cols].agg(' '.join, axis=1)
+    
     return df
 
-# --- ENGINE AI ---
+# --- ENGINE CLUSTERING ---
 @st.cache_resource
 def train_model(df, k):
     if len(df) < k: k = max(1, len(df))
@@ -38,85 +48,107 @@ def train_model(df, k):
     df['Cluster'] = model.fit_predict(tfidf_matrix)
     return df, vectorizer, model, tfidf_matrix
 
-# --- MAIN APP ---
+# --- MAIN INTERFACE ---
 try:
     df_raw = load_data_from_gsheets()
 
     with st.sidebar:
         st.title("🤖 Cloud Settings")
-        if 'k_val' not in st.session_state: st.session_state['k_val'] = 10
+        if 'k_val' not in st.session_state: 
+            st.session_state['k_val'] = 10
         
         if not df_raw.empty and len(df_raw) > 2:
-            if st.button("🔍 Hitung K Ideal"):
-                with st.spinner("Menganalisis Cloud Data..."):
+            st.subheader("Optimasi Cluster")
+            if st.button("🔍 Cari K Ideal (Silhouette)"):
+                with st.spinner("Menganalisis pola data di Cloud..."):
                     best_k, max_score = 2, -1
                     limit_k = min(15, len(df_raw) - 1)
+                    
                     vec_t = TfidfVectorizer(stop_words='english')
                     mtx_t = vec_t.fit_transform(df_raw['combined_features'])
+                    
                     for kt in range(2, limit_k + 1):
                         km = KMeans(n_clusters=kt, random_state=42, n_init=5)
                         labels = km.fit_predict(mtx_t)
                         score = silhouette_score(mtx_t, labels)
-                        if score > max_score: max_score, best_k = score, kt
+                        if score > max_score:
+                            max_score = score
+                            best_k = kt
+                    
                     st.session_state['k_val'] = best_k
-                    st.success(f"Saran K: {best_k}")
+                    st.success(f"Saran K Terbaik: {best_k}")
 
-        k_val = st.slider("Jumlah Kelompok", 2, 20, st.session_state['k_val'])
-        if st.button("🔄 Sinkronisasi Ulang"):
+        k_val = st.slider("Jumlah Kelompok (K)", 2, 20, st.session_state['k_val'])
+        
+        st.divider()
+        if st.button("🔄 Paksa Sinkronisasi Cloud"):
             st.cache_resource.clear()
             st.rerun()
 
     if df_raw.empty:
-        st.warning("Database Google Sheets Kosong!")
-        df, vec, model, matrix = None, None, None, None
+        st.warning("Database Google Sheets Kosong! Pastikan Header sudah benar.")
     else:
+        # Jalankan Clustering
         df, vec, model, matrix = train_model(df_raw, k_val)
 
-    st.title("🚀 Smart Category Assistant (Cloud)")
+        st.title("🚀 Smart Category Assistant (Cloud Mode)")
+        st.markdown("Aplikasi ini terhubung langsung ke Google Sheets sebagai database utama.")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Analitik", "➕ Tambah Produk", "🔍 Eksplorasi", "📁 Google Sheets"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 Analitik", "➕ Tambah Produk", "🔍 Eksplorasi Segmen", "📁 Database Live"])
 
-    with tab1:
-        if df is not None:
-            m1, m2 = st.columns(2)
-            m1.metric("Total Data di Cloud", len(df))
+        with tab1:
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Produk", len(df))
             m2.metric("Kelompok AI", k_val)
+            m3.metric("Status Server", "Online")
+            
+            # Visualisasi PCA
             pca = PCA(n_components=2)
             coords = pca.fit_transform(matrix.toarray())
             df['x'], df['y'] = coords[:, 0], coords[:, 1]
-            fig = px.scatter(df, x='x', y='y', color='Cluster', hover_data=['Product Name'], template="plotly_white")
+            fig = px.scatter(df, x='x', y='y', color='Cluster', 
+                           hover_data=['Product Name', 'Category'], 
+                           template="plotly_white", height=500)
             st.plotly_chart(fig, use_container_width=True)
 
-    with tab2:
-        st.subheader("➕ Tambah ke Google Sheets")
-        with st.form("gsheets_form", clear_on_submit=True):
-            f_name = st.text_input("Nama Produk")
-            f_cat = st.text_input("Kategori")
-            f_tag = st.text_area("Tag (pisahkan dengan spasi)")
-            submitted = st.form_submit_button("Simpan ke Cloud")
+        with tab2:
+            st.subheader("➕ Tambah Produk Baru ke Cloud")
+            st.info("Produk yang disimpan di sini akan langsung muncul di Google Sheets Anda.")
             
-        if submitted and f_name:
-            tags = (f_tag.split() + [""] * 5)[:5]
-            new_data = pd.DataFrame([[f_name, f_cat] + tags], 
-                                    columns=['Product Name', 'Category', 'tag1', 'tag2', 'tag3', 'tag4', 'tag5'])
-            
-            # Gabungkan data lama dan baru
-            updated_df = pd.concat([df_raw.drop(columns=['combined_features'], errors='ignore'), new_data], ignore_index=True)
-            
-            # Update ke Google Sheets
-            conn.update(spreadsheet=SQL_URL, data=updated_df)
-            st.success("✅ Berhasil dikirim ke Google Sheets!")
-            st.cache_resource.clear()
-            st.rerun()
+            with st.form("gsheets_form", clear_on_submit=True):
+                f_name = st.text_input("Nama Produk")
+                f_cat = st.text_input("Kategori Utama")
+                f_tag = st.text_area("Tag/Deskripsi (pisahkan dengan spasi)")
+                submitted = st.form_submit_button("Simpan Permanen ke Google Sheets")
+                
+            if submitted and f_name:
+                # Siapkan baris baru
+                tags_list = (f_tag.split() + [""] * 5)[:5]
+                new_row = pd.DataFrame([[f_name, f_cat] + tags_list], 
+                                        columns=['Product Name', 'Category', 'tag1', 'tag2', 'tag3', 'tag4', 'tag5'])
+                
+                # Bersihkan data lama dari kolom kalkulasi AI
+                clean_old_df = df_raw.drop(columns=['combined_features', 'Cluster', 'x', 'y'], errors='ignore')
+                updated_df = pd.concat([clean_old_df, new_row], ignore_index=True)
+                
+                # Update Google Sheets
+                conn.update(spreadsheet=SQL_URL, data=updated_df)
+                st.success(f"✅ Produk '{f_name}' berhasil disimpan di Cloud!")
+                
+                # Hapus cache dan refresh
+                st.cache_resource.clear()
+                st.rerun()
 
-    with tab3:
-        if df is not None:
-            sel = st.selectbox("Cluster:", sorted(df['Cluster'].unique()))
-            st.table(df[df['Cluster'] == sel][['Product Name', 'Category']].head(10))
+        with tab3:
+            sel_c = st.selectbox("Pilih Cluster:", sorted(df['Cluster'].unique()))
+            st.write(f"Daftar Produk di Cluster {sel_c}:")
+            st.dataframe(df[df['Cluster'] == sel_c][['Product Name', 'Category', 'tag1', 'tag2']], use_container_width=True)
 
-    with tab4:
-        st.subheader("📁 Preview Data Live")
-        st.dataframe(df_raw.drop(columns=['combined_features'], errors='ignore'), use_container_width=True)
+        with tab4:
+            st.subheader("📁 Tampilan Data Google Sheets")
+            # Menghapus kolom pembantu sebelum ditampilkan
+            st.dataframe(df_raw.drop(columns=['combined_features', 'Cluster', 'x', 'y'], errors='ignore'), use_container_width=True)
 
 except Exception as e:
-    st.error(f"Koneksi GSheets Gagal: {e}")
+    st.error(f"Koneksi Database Gagal: {e}")
+    st.info("Pastikan link Google Sheets Anda sudah diatur ke 'Anyone with the link can edit'.")
