@@ -3,39 +3,25 @@ import pandas as pd
 import joblib
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.preprocessing import StandardScaler
+import numpy as np
 
 # 1. KONFIGURASI HALAMAN
 st.set_page_config(
-    page_title="Academic Performance Dashboard",
+    page_title="Academic Performance Analyzer | Stevanus",
     page_icon="🎓",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
-# Custom CSS untuk mempercantik tampilan
+# Custom CSS untuk UI yang lebih bersih
 st.markdown("""
     <style>
-    .main {
-        background-color: #f5f7f9;
-    }
-    .stMetric {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .stButton>button {
-        width: 100%;
-        border-radius: 5px;
-        height: 3em;
-        background-color: #007bff;
-        color: white;
-    }
+    .main { background-color: #f8f9fa; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. LOAD MODEL & SCALER
+# 2. FUNGSI PEMBANTU
 @st.cache_resource
 def load_assets():
     try:
@@ -45,103 +31,133 @@ def load_assets():
     except:
         return None, None
 
+def get_cluster_info(cluster_num):
+    info = {
+        0: {
+            "label": "🚀 High Achiever (Performa Tinggi)",
+            "desc": "Mahasiswa dengan nilai kuis/ujian di atas rata-rata dan kehadiran sangat konsisten.",
+            "saran": "Pertahankan ritme belajar. Cocok menjadi asisten dosen atau mentor sebaya.",
+            "color": "#2ecc71" # Hijau
+        },
+        1: {
+            "label": "📊 Steady / Average (Performa Menengah)",
+            "desc": "Mahasiswa menunjukkan performa stabil namun memiliki potensi untuk ditingkatkan lagi.",
+            "saran": "Fokus pada area yang fluktuatif (misal: nilai lab) untuk mendongkrak IPK.",
+            "color": "#f1c40f" # Kuning
+        },
+        2: {
+            "label": "⚠️ Underperformer / At-Risk (Performa Berisiko)",
+            "desc": "Nilai cenderung rendah dan kehadiran di bawah 60%. Berisiko tinggi mengalami kegagalan studi.",
+            "saran": "Perlu bimbingan akademik intensif dan pemantauan kehadiran berkala.",
+            "color": "#e74c3c" # Merah
+        }
+    }
+    return info.get(cluster_num, {"label": "Unknown", "desc": "-", "saran": "-", "color": "#7f8c8d"})
+
+# 3. LOAD MODEL
 model, scaler = load_assets()
 
-# 3. SIDEBAR NAVIGATION
+# 4. SIDEBAR
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3413/3413535.png", width=100)
-    st.title("Proyek UAS AI")
-    st.info(f"Nama: **Stevanus**\n\nTema: Academic Clustering")
-    menu = st.radio("Menu Utama", ["🏠 Beranda & Analisis", "🔍 Prediksi Individu"])
+    st.title("🎓 Smart Campus AI")
+    st.write(f"Oleh: **Stevanus**")
     st.divider()
-    uploaded_file = st.file_uploader("Upload Data Mahasiswa (CSV)", type="csv")
+    menu = st.radio("Navigasi Utama", ["🏠 Dashboard Analisis", "🔍 Prediksi Individu"])
+    st.divider()
+    uploaded_file = st.file_uploader("Upload 'student_dropout_behavior_dataset.csv'", type="csv")
 
-# 4. LOGIK UTAMA
-if model is None:
-    st.error("⚠️ File model (kmeans_model.pkl) atau scaler tidak ditemukan! Pastikan sudah menjalankan training di Colab.")
+# 5. LOGIKA UTAMA
+if model is None or scaler is None:
+    st.error("❌ Model atau Scaler (.pkl) tidak ditemukan. Jalankan file notebook di Colab terlebih dahulu!")
 else:
-    if menu == "🏠 Beranda & Analisis":
-        st.title("📊 Dashboard Analisis Performa Akademik")
+    features = ['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
+
+    # --- MENU 1: DASHBOARD ANALISIS ---
+    if menu == "🏠 Dashboard Analisis":
+        st.title("📊 Dashboard Analisis Performa Mahasiswa")
         
         if uploaded_file is not None:
             df = pd.read_csv(uploaded_file)
-            features = ['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
             
-            # Preprocessing & Clustering
+            # Preprocessing & Prediction
             df_clean = df[features].fillna(df[features].mean())
             scaled_data = scaler.transform(df_clean)
             df['Cluster'] = model.predict(scaled_data)
             
-            # FITUR BARU: METRIKS RINGKASAN
-            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-            col_m1.metric("Total Mahasiswa", len(df))
-            col_m2.metric("Rata-rata Final", f"{df['final_marks'].mean():.1f}")
-            col_m3.metric("Rata-rata IPK", f"{df['previous_gpa'].mean():.2f}")
-            col_m4.metric("Jumlah Cluster", len(df['Cluster'].unique()))
-
+            # Metrik Ringkasan
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Total Mahasiswa", len(df))
+            c2.metric("Rata-rata Final", f"{df['final_marks'].mean():.1f}")
+            c3.metric("Rata-rata IPK", f"{df['previous_gpa'].mean():.2f}")
+            c4.metric("Kategori Cluster", len(df['Cluster'].unique()))
+            
             st.divider()
 
-            # VISUALISASI INTERAKTIF DENGAN PLOTLY
-            c1, c2 = st.columns([6, 4])
+            # Visualisasi
+            col_left, col_right = st.columns([6, 4])
             
-            with c1:
-                st.subheader("📍 Sebaran Klaster (Midterm vs Final)")
-                fig_scatter = px.scatter(df, x="midterm_marks", y="final_marks", color="Cluster",
-                                         hover_data=['name'] if 'name' in df.columns else None,
-                                         template="plotly_white", color_continuous_scale="Viridis")
-                st.plotly_chart(fig_scatter, use_container_width=True)
+            with col_left:
+                st.subheader("📍 Sebaran Cluster (Midterm vs Final)")
+                fig = px.scatter(df, x="midterm_marks", y="final_marks", color="Cluster", 
+                                 color_continuous_scale="Viridis", template="plotly_white")
+                st.plotly_chart(fig, use_container_width=True)
 
-            with c2:
-                st.subheader("🥧 Komposisi Mahasiswa")
-                fig_pie = px.pie(df, names="Cluster", hole=0.4, template="plotly_white")
+            with col_right:
+                st.subheader("🥧 Distribusi Per Kategori")
+                # Mengganti angka cluster dengan label teks untuk pie chart
+                df['Cluster_Label'] = df['Cluster'].apply(lambda x: get_cluster_info(x)['label'])
+                fig_pie = px.pie(df, names="Cluster_Label", hole=0.4, 
+                                 color_discrete_sequence=px.colors.qualitative.Pastel)
                 st.plotly_chart(fig_pie, use_container_width=True)
 
-            # FITUR BARU: TABEL DATA DENGAN FILTER
-            st.subheader("📋 Daftar Mahasiswa Berdasarkan Klaster")
-            selected_cluster = st.multiselect("Filter Klaster:", options=sorted(df['Cluster'].unique()), default=df['Cluster'].unique())
-            filtered_df = df[df['Cluster'].isin(selected_cluster)]
-            st.dataframe(filtered_df, use_container_width=True)
+            # Tabel Data dengan Filter
+            st.subheader("📋 Eksplorasi Data Mahasiswa")
+            cl_filter = st.multiselect("Filter Berdasarkan Cluster:", options=sorted(df['Cluster'].unique()), default=df['Cluster'].unique())
+            st.dataframe(df[df['Cluster'].isin(cl_filter)], use_container_width=True)
             
         else:
-            st.warning("Silakan unggah file 'student_dropout_behavior_dataset.csv' untuk melihat dashboard.")
-            st.image("https://i.imgur.com/8M2Y9T8.png", caption="Contoh Dashboard Analisis")
+            st.info("Silakan unggah dataset di sidebar untuk melihat analisis menyeluruh.")
 
-    elif menu == "🔍 Prediksi Individu":
-        st.title("🔍 Prediksi Kategori Mahasiswa")
-        st.write("Gunakan form di bawah untuk menganalisis kategori performa mahasiswa secara instan.")
-        
-        with st.container():
-            col_a, col_b = st.columns(2)
-            with col_a:
-                q1 = st.slider("Nilai Quiz 1", 0.0, 10.0, 7.5)
-                q2 = st.slider("Nilai Quiz 2", 0.0, 10.0, 7.5)
-                mid = st.number_input("Nilai Midterm", 0.0, 100.0, 70.0)
-                lec = st.number_input("Jam Kehadiran Kuliah", 0, 12, 10)
-            with col_b:
-                q3 = st.slider("Nilai Quiz 3", 0.0, 10.0, 7.5)
-                gpa = st.slider("IPK Sebelumnya", 0.0, 4.0, 3.2)
-                fin = st.number_input("Nilai Final Exam", 0.0, 100.0, 75.0)
-                lab = st.number_input("Jam Kehadiran Lab", 0, 6, 5)
+    # --- MENU 2: PREDIKSI INDIVIDU ---
+    else:
+        st.title("🔍 Prediksi Kategori Mahasiswa Baru")
+        st.write("Masukkan data di bawah untuk melihat interpretasi performa.")
 
-            if st.button("🚀 Jalankan Analisis"):
-                input_raw = pd.DataFrame([[q1, q2, q3, mid, fin, gpa, lec, lab]], 
-                                       columns=['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended'])
-                
-                scaled_input = scaler.transform(input_raw)
-                cluster_res = model.predict(scaled_input)[0]
-                
-                # Desain Card Hasil
-                st.divider()
-                if cluster_res == 0:
-                    st.success("### 🌟 Hasil: CLUSTER 0 - PERFORMA TINGGI")
-                    st.write("Mahasiswa menunjukkan dedikasi tinggi dengan nilai stabil dan kehadiran maksimal.")
-                elif cluster_res == 1:
-                    st.warning("### 📊 Hasil: CLUSTER 1 - PERFORMA MENENGAH")
-                    st.write("Mahasiswa memiliki potensi namun perlu meningkatkan konsistensi pada tugas/quiz.")
-                else:
-                    st.error("### ⚠️ Hasil: CLUSTER 2 - PERFORMA BERISIKO")
-                    st.write("Mahasiswa memerlukan bimbingan khusus karena nilai atau kehadiran di bawah rata-rata.")
+        with st.form("input_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                q1 = st.slider("Quiz 1", 0.0, 10.0, 7.0)
+                q2 = st.slider("Quiz 2", 0.0, 10.0, 7.0)
+                q3 = st.slider("Quiz 3", 0.0, 10.0, 7.0)
+                mid = st.number_input("Midterm Marks", 0, 100, 75)
+            with col2:
+                fin = st.number_input("Final Marks", 0, 100, 75)
+                gpa = st.slider("Previous GPA", 0.0, 4.0, 3.0)
+                lec = st.number_input("Lectures Attended", 0, 12, 10)
+                lab = st.number_input("Labs Attended", 0, 6, 5)
+            
+            btn = st.form_submit_button("Analisis Performa")
 
-# 5. FOOTER
-st.sidebar.markdown("---")
-st.sidebar.caption("UAS Pemrograman AI © 2024 - Stevanus")
+        if btn:
+            # Predict
+            input_df = pd.DataFrame([[q1, q2, q3, mid, fin, gpa, lec, lab]], columns=features)
+            scaled_input = scaler.transform(input_df)
+            cluster_id = model.predict(scaled_input)[0]
+            
+            # Get Info
+            info = get_cluster_info(cluster_id)
+            
+            # Display Card
+            st.markdown(f"""
+                <div style="background-color:{info['color']}; padding:30px; border-radius:15px; text-align:center;">
+                    <h1 style="color:white; margin-bottom:0;">{info['label']}</h1>
+                    <p style="color:white; font-size:1.2em; margin-top:10px;">{info['desc']}</p>
+                    <div style="background-color:rgba(255,255,255,0.2); padding:15px; border-radius:10px; margin-top:20px;">
+                        <p style="color:white; margin:0;"><b>💡 Rekomendasi:</b> {info['saran']}</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+# 6. FOOTER
+st.divider()
+st.caption(f"© 2024 UAS Pemrograman AI - Stevanus (Cluster 15)")
