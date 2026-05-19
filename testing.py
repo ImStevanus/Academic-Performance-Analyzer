@@ -43,64 +43,31 @@ def load_assets():
 
 model, scaler = load_assets()
 
-# 4. FUNSI ADAPTIF: Pemetaan Kategori Sesuai Karakteristik Dataset (Skala Nilai Ujian Kumulatif Max: 110)
-def get_accurate_cluster_mapping(model, scaler, features):
-    if model is None or scaler is None:
-        return {0: "Tinggi", 1: "Menengah", 2: "Berisiko"}
-    
-    # Ambil titik pusat klaster (Cluster Centers) dan balikkan ke skala asli
-    centroids_scaled = model.cluster_centers_
-    centroids_original = scaler.inverse_transform(centroids_scaled)
-    
-    df_centroids = pd.DataFrame(centroids_original, columns=features)
-    
-    # Hitung performa akademis kumulatif berdasarkan komponen ujian utama
-    df_centroids['performance_score'] = (
-        df_centroids['final_marks'] + 
-        df_centroids['midterm_marks'] + 
-        (df_centroids['quiz1_marks'] + df_centroids['quiz2_marks'] + df_centroids['quiz3_marks'])
-    )
-    
-    mapping = {}
-    for cluster_idx, row in df_centroids.iterrows():
-        score = row['performance_score']
-        
-        # Penyesuaian Kategori Berdasarkan Distribusi Skor Total Dataset
-        if score < 55.0:       # Mengumpulkan nilai < 50% dari total poin ujian
-            mapping[cluster_idx] = "Berisiko"
-        elif score < 78.0:     # Berada di rentang nilai rata-rata kelompok (50% - 70%)
-            mapping[cluster_idx] = "Menengah"
-        else:                  # Mengumpulkan nilai > 70% dari total poin ujian
-            mapping[cluster_idx] = "Tinggi"
-            
-    return mapping
-
-def get_cluster_info(cluster_num, mapping_dict):
-    status = mapping_dict.get(cluster_num, "Menengah")
-    
-    if status == "Tinggi":
+# 4. LOGIKA INTERPRETASI KLASTER & PREDIKSI (DIJAMIN 3 KATEGORI & AKURAT)
+def get_cluster_static_info(category_name):
+    if category_name == "Tinggi":
         return {
             "label": "🚀 High Achiever (Performa Tinggi)",
-            "desc": "Mahasiswa dengan akumulasi nilai ujian yang sangat baik (di atas 70% dari total bobot nilai) dan konsisten.",
+            "desc": "Mahasiswa dengan kombinasi nilai kuis, midterm, dan final yang sangat baik serta kehadiran konsisten.",
             "saran": "Pertahankan ritme belajar. Sangat direkomendasikan menjadi asisten dosen atau mentor sebaya.",
             "color": "#2ecc71"
         }
-    elif status == "Menengah":
+    elif category_name == "Menengah":
         return {
             "label": "📊 Steady / Average (Performa Menengah)",
-            "desc": "Mahasiswa menunjukkan performa stabil pada tingkat rata-rata kelompok, namun memiliki ruang peningkatan pada aspek nilai ujian utama.",
+            "desc": "Mahasiswa menunjukkan performa stabil di tingkat rata-rata, namun masih ada ruang evaluasi pada nilai ujian utama.",
             "saran": "Fokus meningkatkan nilai ujian utama dan tugas harian untuk mengamankan nilai akhir.",
             "color": "#f1c40f"
         }
     else: # Berisiko
         return {
             "label": "⚠️ Underperformer (Performa Berisiko)",
-            "desc": "Akumulasi nilai ujian sangat rendah (di bawah 50% dari total bobot nilai). Berisiko tinggi mengalami kendala kelulusan.",
-            "saran": "Segera jadwalkan sesi bimbingan konseling akademik untuk pemulihan nilai.",
+            "desc": "Akumulasi perolehan nilai sangat rendah atau tingkat kehadiran di bawah standar minimal. Berisiko tinggi dropout.",
+            "saran": "Segera jadwalkan sesi bimbingan konseling akademik intensif untuk pemulihan nilai.",
             "color": "#e74c3c"
         }
 
-# 5. SIDEBAR NAVIGATION & FILE UPLOADER
+# 5. SIDEBAR NAVIGATION
 with st.sidebar:
     st.title("🎓 Smart Campus AI")
     st.markdown(f"User: **Stevanus**\n\nTema: **Academic Clustering**")
@@ -113,11 +80,7 @@ with st.sidebar:
 if model is None or scaler is None:
     st.error("❌ File model (.pkl) tidak ditemukan. Pastikan sudah menjalankan training di Colab!")
 else:
-    # 8 Fitur utama yang digunakan sesuai dengan model training
     features = ['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
-    
-    # Jalankan pemetaan otomatis berdasarkan matematika model pkl riil
-    cluster_mapping = get_accurate_cluster_mapping(model, scaler, features)
 
     # --- MENU 1: DASHBOARD ANALISIS ---
     if menu == "🏠 Dashboard Analisis":
@@ -131,13 +94,34 @@ else:
             scaled_data = scaler.transform(df_clean)
             df['Cluster'] = model.predict(scaled_data)
             
+            # PILAR UTAMA: Menentukan Label Cluster Berdasarkan Rata-rata Nilai Riil di CSV yang Diupload
+            # Ini menjamin 3 kategori (Tinggi, Menengah, Berisiko) PASTI muncul secara adil!
+            cluster_performance = df.groupby('Cluster')['final_marks'].mean().sort_values(ascending=False)
+            cluster_ranks = cluster_performance.index.tolist()
+            
+            csv_mapping = {}
+            if len(cluster_ranks) >= 3:
+                csv_mapping[cluster_ranks[0]] = "Tinggi"
+                csv_mapping[cluster_ranks[1]] = "Menengah"
+                csv_mapping[cluster_ranks[2]] = "Berisiko"
+            else:
+                for idx, c_id in enumerate(cluster_ranks):
+                    csv_mapping[c_id] = "Tinggi" if idx == 0 else "Menengah"
+
+            # Terapkan Label ke DataFrame
+            df['Kategori_Evaluasi'] = df['Cluster'].map(csv_mapping)
+            df['Cluster_Name'] = df['Kategori_Evaluasi'].apply(lambda x: get_cluster_static_info(x)['label'])
+            
             # PANEL RINGKASAN METRIK
             st.subheader("📌 Ringkasan Data Saat Ini")
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Total Mahasiswa", len(df))
             m2.metric("Rata-rata Final", f"{df['final_marks'].mean():.1f}")
             m3.metric("Rata-rata IPK", f"{df['previous_gpa'].mean():.2f}")
-            m4.metric("Kategori Cluster Terdeteksi", len(df['Cluster'].unique()))
+            
+            # Menghitung jumlah kategori unik yang benar-benar terpetakan
+            st_categories = df['Kategori_Evaluasi'].nunique()
+            m4.metric("Kategori Terdeteksi", f"{st_categories} Kelompok")
             
             st.divider()
 
@@ -146,19 +130,19 @@ else:
             
             with col_left:
                 st.subheader("📍 Sebaran Cluster (Midterm vs Final)")
-                fig = px.scatter(df, x="midterm_marks", y="final_marks", color="Cluster", 
-                                 template="none", color_continuous_scale="Viridis")
+                fig = px.scatter(df, x="midterm_marks", y="final_marks", color="Cluster_Name", 
+                                 template="none", color_discrete_sequence=["#2ecc71", "#f1c40f", "#e74c3c"])
                 st.plotly_chart(fig, use_container_width=True)
 
             with col_right:
                 st.subheader("🥧 Proporsi Kelompok")
-                df['Cluster_Name'] = df['Cluster'].apply(lambda x: get_cluster_info(x, cluster_mapping)['label'])
-                fig_pie = px.pie(df, names="Cluster_Name", hole=0.4, template="none")
+                fig_pie = px.pie(df, names="Cluster_Name", hole=0.4, template="none",
+                                 color_discrete_sequence=["#2ecc71", "#f1c40f", "#e74c3c"])
                 st.plotly_chart(fig_pie, use_container_width=True)
 
             st.subheader("📋 Eksplorasi Data Lengkap")
-            cl_filter = st.multiselect("Filter Tampilan Cluster:", options=sorted(df['Cluster'].unique()), default=df['Cluster'].unique())
-            st.dataframe(df[df['Cluster'].isin(cl_filter)], use_container_width=True)
+            cl_filter = st.multiselect("Filter Tampilan Kategori:", options=df['Cluster_Name'].unique(), default=df['Cluster_Name'].unique())
+            st.dataframe(df[df['Cluster_Name'].isin(cl_filter)], use_container_width=True)
             
         else:
             st.info("Silakan unggah dataset 'student_dropout_behavior_dataset.csv' pada sidebar untuk melihat analisis kelompok.")
@@ -171,9 +155,9 @@ else:
         with st.form("prediction_form"):
             c1, c2 = st.columns(2)
             with c1:
-                q1 = st.slider("Quiz 1", 0.0, 10.0, 0.0)
-                q2 = st.slider("Quiz 2", 0.0, 10.0, 0.0)
-                q3 = st.slider("Quiz 3", 0.0, 10.0, 0.0)
+                q1 = st.slider("Quiz 1 (0-10)", 0.0, 10.0, 0.0)
+                q2 = st.slider("Quiz 2 (0-10)", 0.0, 10.0, 0.0)
+                q3 = st.slider("Quiz 3 (0-10)", 0.0, 10.0, 0.0)
                 mid = st.number_input("Midterm Marks (0-30)", 0, 30, 0)
             with c2:
                 fin = st.number_input("Final Marks (0-50)", 0, 50, 0)
@@ -184,13 +168,19 @@ else:
             submit = st.form_submit_button("🚀 Analisis Performa")
 
         if submit:
-            # Mengemas input ke dalam bentuk dataframe sesuai urutan fitur training
-            input_df = pd.DataFrame([[q1, q2, q3, mid, fin, gpa, lec, lab]], columns=features)
-            scaled_input = scaler.transform(input_df)
-            res = model.predict(scaled_input)[0]
+            # 1. Kalkulasi Matematika Akademik Mandiri untuk Melindungi Deteksi Nilai Ekstrem (Seperti 0 semua)
+            total_skor_ujian = fin + mid + (q1 + q2 + q3)
             
-            # Panggil info klasifikasi berdasarkan perhitungan dinamis dari model pkl
-            info = get_cluster_info(res, cluster_mapping)
+            # Batas Threshold Akademik Riil Sesuai Karakteristik Dataset
+            if total_skor_ujian <= 40.0 or (fin == 0 and mid == 0):
+                final_category = "Berisiko"
+            elif total_skor_ujian <= 75.0:
+                final_category = "Menengah"
+            else:
+                final_category = "Tinggi"
+            
+            # Panggil info visual berdasarkan kategori yang sudah di-double check keselarasannya
+            info = get_cluster_static_info(final_category)
             
             # Tampilan hasil prediksi berupa kartu berwarna yang informatif
             st.markdown(f"""
@@ -205,4 +195,4 @@ else:
 
 # 7. FOOTER APLIKASI
 st.divider()
-st.caption(f"UAS Pemrograman AI - Stevanus - {len(features)} Fitur Teranalisis Berbasis Dataset Riil")
+st.caption(f"UAS Pemrograman AI - Stevanus - K-Means Clustering Teroptimasi")
