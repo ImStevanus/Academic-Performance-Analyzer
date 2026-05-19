@@ -31,7 +31,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. FUNGSI LOAD ASSETS
+# 3. FUNGSI LOAD ASSETS & PEMETAAN KLASTER SECARA AKURAT
 @st.cache_resource
 def load_assets():
     try:
@@ -41,12 +41,41 @@ def load_assets():
     except:
         return None, None
 
-# Fungsi dinamis untuk menentukan arti cluster berdasarkan profil data
-def get_dynamic_cluster_info(cluster_num, mapping_dict=None):
-    # Mapping default jika dataset belum di-upload di menu utama
-    if mapping_dict is None:
-        mapping_dict = {0: "Tinggi", 1: "Menengah", 2: "Berisiko"}
-        
+model, scaler = load_assets()
+
+# FITUR UTAMA: Membuat mapping klaster berdasarkan bobot nilai riil di dalam model K-Means
+def get_accurate_cluster_mapping(model, scaler, features):
+    if model is None or scaler is None:
+        return {0: "Tinggi", 1: "Menengah", 2: "Berisiko"}
+    
+    # Ambil titik pusat klaster (Cluster Centers) dalam bentuk skala asli (sebelum di-scale)
+    centroids_scaled = model.cluster_centers_
+    centroids_original = scaler.inverse_transform(centroids_scaled)
+    
+    df_centroids = pd.DataFrame(centroids_original, columns=features)
+    
+    # Hitung performa berdasarkan total kontribusi nilai krusial (Final + Midterm + Rata-rata Quiz)
+    df_centroids['performance_score'] = (
+        df_centroids['final_marks'] + 
+        df_centroids['midterm_marks'] + 
+        (df_centroids['quiz1_marks'] + df_centroids['quiz2_marks'] + df_centroids['quiz3_marks'])
+    )
+    
+    # Urutkan index klaster dari skor tertinggi ke terendah
+    sorted_clusters = df_centroids['performance_score'].sort_values(ascending=False).index.tolist()
+    
+    mapping = {}
+    if len(sorted_clusters) >= 3:
+        mapping[sorted_clusters[0]] = "Tinggi"
+        mapping[sorted_clusters[1]] = "Menengah"
+        mapping[sorted_clusters[2]] = "Berisiko"
+    else:
+        for idx, c_id in enumerate(sorted_clusters):
+            mapping[c_id] = "Tinggi" if idx == 0 else "Berisiko"
+            
+    return mapping
+
+def get_cluster_info(cluster_num, mapping_dict):
     status = mapping_dict.get(cluster_num, "Menengah")
     
     if status == "Tinggi":
@@ -71,8 +100,6 @@ def get_dynamic_cluster_info(cluster_num, mapping_dict=None):
             "color": "#e74c3c"
         }
 
-model, scaler = load_assets()
-
 # 4. SIDEBAR
 with st.sidebar:
     st.title("🎓 Smart Campus AI")
@@ -82,15 +109,14 @@ with st.sidebar:
     st.divider()
     uploaded_file = st.file_uploader("Upload Dataset CSV", type="csv")
 
-# Initialize session state untuk menyimpan mapping cluster secara global
-if 'cluster_mapping' not in st.session_state:
-    st.session_state['cluster_mapping'] = {0: "Tinggi", 1: "Menengah", 2: "Berisiko"}
-
 # 5. LOGIKA UTAMA
 if model is None or scaler is None:
     st.error("❌ File model (.pkl) tidak ditemukan. Pastikan sudah menjalankan training di Colab!")
 else:
     features = ['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
+    
+    # Jalankan fungsi mapping akurat secara otomatis dari model `.pkl`
+    cluster_mapping = get_accurate_cluster_mapping(model, scaler, features)
 
     # --- MENU 1: DASHBOARD ANALISIS ---
     if menu == "🏠 Dashboard Analisis":
@@ -103,22 +129,6 @@ else:
             df_clean = df[features].fillna(df[features].mean())
             scaled_data = scaler.transform(df_clean)
             df['Cluster'] = model.predict(scaled_data)
-            
-            # FITUR KRITIKAL: Mapping Otomatis Berdasarkan Rata-Rata Nilri Riil (Final Marks + Midterm Marks)
-            cluster_means = df.groupby('Cluster')[['final_marks', 'midterm_marks']].mean().sum(axis=1)
-            sorted_clusters = cluster_means.sort_values(ascending=False).index.tolist()
-            
-            # Buat mapping dinamis
-            dynamic_mapping = {}
-            if len(sorted_clusters) >= 3:
-                dynamic_mapping[sorted_clusters[0]] = "Tinggi"
-                dynamic_mapping[sorted_clusters[1]] = "Menengah"
-                dynamic_mapping[sorted_clusters[2]] = "Berisiko"
-            else:
-                for idx, c_id in enumerate(sorted_clusters):
-                    dynamic_mapping[c_id] = "Tinggi" if idx == 0 else "Berisiko"
-                    
-            st.session_state['cluster_mapping'] = dynamic_mapping
             
             # BAGIAN METRIK
             st.subheader("📌 Ringkasan Data Saat Ini")
@@ -141,7 +151,7 @@ else:
 
             with col_right:
                 st.subheader("🥧 Proporsi Kelompok")
-                df['Cluster_Name'] = df['Cluster'].apply(lambda x: get_dynamic_cluster_info(x, st.session_state['cluster_mapping'])['label'])
+                df['Cluster_Name'] = df['Cluster'].apply(lambda x: get_cluster_info(x, cluster_mapping)['label'])
                 fig_pie = px.pie(df, names="Cluster_Name", hole=0.4, template="none")
                 st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -150,7 +160,7 @@ else:
             st.dataframe(df[df['Cluster'].isin(cl_filter)], use_container_width=True)
             
         else:
-            st.info("Silakan unggah dataset 'student_dropout_behavior_dataset.csv' pada sidebar untuk mengaktifkan kalkulasi klaster dinamis.")
+            st.info("Silakan unggah dataset 'student_dropout_behavior_dataset.csv' pada sidebar untuk melihat analisis kelompok.")
 
     # --- MENU 2: PREDIKSI INDIVIDU ---
     else:
@@ -160,15 +170,15 @@ else:
         with st.form("prediction_form"):
             c1, c2 = st.columns(2)
             with c1:
-                q1 = st.slider("Quiz 1", 0.0, 10.0, 7.5)
-                q2 = st.slider("Quiz 2", 0.0, 10.0, 7.5)
-                q3 = st.slider("Quiz 4", 0.0, 10.0, 7.5)
-                mid = st.number_input("Midterm Marks (0-100)", 0, 100, 70)
+                q1 = st.slider("Quiz 1", 0.0, 10.0, 0.0)
+                q2 = st.slider("Quiz 2", 0.0, 10.0, 0.0)
+                q3 = st.slider("Quiz 3", 0.0, 10.0, 0.0)
+                mid = st.number_input("Midterm Marks (0-100)", 0, 100, 0)
             with c2:
-                fin = st.number_input("Final Marks (0-100)", 0, 100, 75)
-                gpa = st.slider("Previous GPA (0.0-4.0)", 0.0, 4.0, 3.2)
-                lec = st.number_input("Lectures Attended", 0, 12, 10)
-                lab = st.number_input("Labs Attended", 0, 6, 5)
+                fin = st.number_input("Final Marks (0-100)", 0, 100, 0)
+                gpa = st.slider("Previous GPA (0.0-4.0)", 0.0, 4.0, 0.0)
+                lec = st.number_input("Lectures Attended", 0, 12, 0)
+                lab = st.number_input("Labs Attended", 0, 6, 0)
             
             submit = st.form_submit_button("🚀 Analisis Performa")
 
@@ -177,8 +187,8 @@ else:
             scaled_input = scaler.transform(input_df)
             res = model.predict(scaled_input)[0]
             
-            # Memanggil info klaster menggunakan mapping dinamis hasil kalkulasi data utama
-            info = get_dynamic_cluster_info(res, st.session_state['cluster_mapping'])
+            # Panggil info dengan mapping berbasis matematika model riil
+            info = get_cluster_info(res, cluster_mapping)
             
             # Kartu Hasil yang Mencolok
             st.markdown(f"""
