@@ -25,7 +25,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. FUNGSI LOAD MODEL STATIC (Untuk Prediksi Individu)
+# 3. FUNGSI LOAD MODEL AWAL (Untuk Prediksi Individu)
 @st.cache_resource
 def load_assets():
     try:
@@ -61,111 +61,78 @@ if menu == "🏠 Dashboard Analisis Dinamis":
     
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
-        df.columns = df.columns.str.strip().str.lower()
         
-        st.subheader("🎛️ Pengaturan Sumbu & Parameter Visualisasi")
-        st.write("Pilih parameter untuk Sumbu X dan Sumbu Y. Sistem akan langsung melakukan clustering dan memperbarui grafik & pie chart secara sinkron:")
+        # FITUR UNGGULAN: Pilih Parameter untuk Clustering Ulang
+        st.subheader("⚙️ Konfigurasi Re-Clustering")
+        st.write("Sistem akan menghitung ulang kelompok (K-Means) berdasarkan parameter yang Anda pilih di bawah:")
         
         all_features = ['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
-        available_features = [f for f in all_features if f in df.columns]
-        
-        # DROP-DOWN UTAMA UNTUK SUMBU GRAFIK & BASIS CLUSTERING
-        c_select1, c_select2 = st.columns(2)
-        with c_select1:
-            x_axis = st.selectbox(
-                "Sumbu X Grafik & Parameter 1:",
-                options=available_features,
-                index=available_features.index('midterm_marks') if 'midterm_marks' in available_features else 0,
-                format_func=lambda x: x.replace('_', ' ').title(),
-                key="sb_x_ultimate",
-                on_change=lambda: st.rerun() if hasattr(st, "rerun") else None
-            )
-        with c_select2:
-            y_axis = st.selectbox(
-                "Sumbu Y Grafik & Parameter 2:",
-                options=available_features,
-                index=available_features.index('final_marks') if 'final_marks' in available_features else 0,
-                format_func=lambda x: x.replace('_', ' ').title(),
-                key="sb_y_ultimate",
-                on_change=lambda: st.rerun() if hasattr(st, "rerun") else None
-            )
+        selected_features = st.multiselect(
+            "Pilih Parameter untuk Analisis Kelompok:",
+            options=all_features,
+            default=['midterm_marks', 'final_marks', 'lectures_attended'],
+            format_func=lambda x: x.replace('_', ' ').title()
+        )
 
-        # Mencegah error jika user memilih parameter sumbu X dan Y yang sama persis
-        if x_axis == y_axis:
-            st.error("⚠️ Sumbu X dan Sumbu Y tidak boleh menggunakan parameter yang sama. Silakan ganti salah satu parameter di atas.")
+        if len(selected_features) < 2:
+            st.warning("⚠️ Pilih minimal 2 parameter agar sistem bisa melakukan pengelompokan (Clustering).")
         else:
-            # --- PROSES DYNAMIC CLUSTERING BERDASARKAN PARAMETER VISUALISASI ---
-            # Model K-Means dilatih HANYA menggunakan 2 kolom pilihan visualisasi aktif
-            selected_pair = [x_axis, y_axis]
-            data_to_cluster = df[selected_pair].fillna(df[selected_pair].mean())
-            
+            # --- PROSES DYNAMIC CLUSTERING ---
+            data_to_cluster = df[selected_features].fillna(df[selected_features].mean())
             scaler_dynamic = StandardScaler()
             scaled_dynamic = scaler_dynamic.fit_transform(data_to_cluster)
             
+            # Hitung K-Means Baru secara instan
             kmeans_dynamic = KMeans(n_clusters=3, random_state=42, n_init=10)
-            df['cluster_dynamic'] = kmeans_dynamic.fit_predict(scaled_dynamic)
+            df['Cluster_Dynamic'] = kmeans_dynamic.fit_predict(scaled_dynamic)
 
-            # Hitung ranking agar pembagian kelompok tetap konsisten (Nilai tertinggi = Hijau, Terendah = Merah)
-            cluster_scores = df.groupby('cluster_dynamic')[selected_pair].mean().sum(axis=1).sort_values(ascending=False)
-            
-            rank_map = {
-                cluster_scores.index[0]: "Tinggi", 
-                cluster_scores.index[1]: "Menengah", 
-                cluster_scores.index[2]: "Berisiko"
-            }
-            
-            df['kategori_live'] = df['cluster_dynamic'].map(rank_map)
-            df['label_live'] = df['kategori_live'].apply(lambda x: get_info(x)['label'])
+            # Sorting Cluster agar peringkatnya benar (0=Tinggi, 1=Menengah, 2=Rendah)
+            # Didasarkan pada rata-rata gabungan parameter yang dipilih
+            cluster_scores = df.groupby('Cluster_Dynamic')[selected_features].mean().sum(axis=1).sort_values(ascending=False)
+            rank_map = {cluster_scores.index[0]: "Tinggi", cluster_scores.index[1]: "Menengah", cluster_scores.index[2]: "Berisiko"}
+            df['Kategori'] = df['Cluster_Dynamic'].map(rank_map)
+            df['Label'] = df['Kategori'].apply(lambda x: get_info(x)['label'])
 
-            # --- PANEL RINGKASAN METRIK ---
+            # --- VISUALISASI ---
             st.divider()
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total Data Mahasiswa", len(df))
-            m2.metric("Parameter Sumbu X", x_axis.replace('_', ' ').title())
-            m3.metric("Parameter Sumbu Y", y_axis.replace('_', ' ').title())
+            m1.metric("Total Mahasiswa", len(df))
+            if 'final_marks' in df.columns:
+                m2.metric("Rata-rata Final", f"{df['final_marks'].mean():.1f}")
+            else:
+                m2.metric("Rata-rata Final", "N/A")
+            m3.metric("Kategori", "3 Kelompok Aktif")
 
-            # --- PANEL VISUALISASI LIVE GRAPH (100% SINKRON) ---
             col_left, col_right = st.columns([6, 4])
             
             with col_left:
-                st.markdown("##### 📍 Sebaran Cluster Berdasarkan Pilihan Parameter")
-                fig = px.scatter(
-                    df, x=x_axis, y=y_axis, color="label_live", 
-                    template="none", 
-                    color_discrete_map={
-                        get_info("Tinggi")['label']: "#2ecc71",
-                        get_info("Menengah")['label']: "#f1c40f",
-                        get_info("Berisiko")['label']: "#e74c3c"
-                    }
-                )
+                st.markdown("##### 📍 Sebaran Kelompok Berdasarkan Pilihan")
+                # Pilih sumbu visualisasi dari fitur yang dipilih user
+                x_axis = st.selectbox("Sumbu X Grafik:", selected_features, index=0)
+                y_axis = st.selectbox("Sumbu Y Grafik:", selected_features, index=1 if len(selected_features) > 1 else 0)
+                
+                fig = px.scatter(df, x=x_axis, y=y_axis, color="Label", 
+                                 template="none", color_discrete_map={
+                                     get_info("Tinggi")['label']: "#2ecc71",
+                                     get_info("Menengah")['label']: "#f1c40f",
+                                     get_info("Berisiko")['label']: "#e74c3c"
+                                 })
                 st.plotly_chart(fig, use_container_width=True)
 
             with col_right:
-                st.markdown("##### 🥧 Proporsi Kelompok Mahasiswa (Up-to-Date)")
-                
-                # Menghitung rangkuman data pie chart dari hasil clustering 2 sumbu di atas
-                pie_data = pd.DataFrame({
-                    'Kelompok': df['label_live'].value_counts().index,
-                    'Jumlah': df['label_live'].value_counts().values
-                })
-                
-                fig_pie = px.pie(
-                    pie_data, names="Kelompok", values="Jumlah",
-                    hole=0.4, template="none",
-                    color="Kelompok", 
-                    color_discrete_map={
-                        get_info("Tinggi")['label']: "#2ecc71",
-                        get_info("Menengah")['label']: "#f1c40f",
-                        get_info("Berisiko")['label']: "#e74c3c"
-                    }
-                )
+                st.markdown("##### 🥧 Proporsi Kelompok (Up-to-Date)")
+                fig_pie = px.pie(df, names="Label", hole=0.4, template="none",
+                                 color="Label", color_discrete_map={
+                                     get_info("Tinggi")['label']: "#2ecc71",
+                                     get_info("Menengah")['label']: "#f1c40f",
+                                     get_info("Berisiko")['label']: "#e74c3c"
+                                 })
                 st.plotly_chart(fig_pie, use_container_width=True)
 
-            st.subheader("📋 Eksplorasi Data Detail")
-            st.dataframe(df[selected_pair + ['label_live']], use_container_width=True)
-            
+            st.subheader("📋 Data Detail")
+            st.dataframe(df[selected_features + ['Label']], use_container_width=True)
     else:
-        st.info("Silakan unggah dataset CSV pada sidebar untuk memulai analisis dinamis.")
+        st.info("Silakan unggah dataset CSV untuk memulai analisis dinamis.")
 
 else:
     st.title("🔍 Prediksi Individu")
@@ -175,25 +142,21 @@ else:
         with st.form("input_form"):
             c1, c2 = st.columns(2)
             with c1:
-                q1 = st.slider("Quiz 1", 0.0, 10.0, 0.0)
-                q2 = st.slider("Quiz 2", 0.0, 10.0, 0.0)
-                q3 = st.slider("Quiz 3", 0.0, 10.0, 0.0)
+                q1 = st.slider("Quiz 1", 0.0, 10.0, 0.0); q2 = st.slider("Quiz 2", 0.0, 10.0, 0.0); q3 = st.slider("Quiz 3", 0.0, 10.0, 0.0)
                 mid = st.number_input("Midterm Marks", 0, 30, 0)
             with c2:
                 fin = st.number_input("Final Marks", 0, 50, 0)
                 gpa = st.slider("GPA", 0.0, 4.0, 0.0)
-                lec = st.number_input("Lectures", 0, 12, 0)
-                lab = st.number_input("Labs", 0, 6, 0)
+                lec = st.number_input("Lectures", 0, 12, 0); lab = st.number_input("Labs", 0, 6, 0)
             submit = st.form_submit_button("Prediksi")
 
         if submit:
+            # Proteksi Nilai 0
             if mid == 0 and fin == 0:
                 res_cat = "Berisiko"
             else:
-                input_data = pd.DataFrame(
-                    [[q1, q2, q3, mid, fin, gpa, lec, lab]], 
-                    columns=['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
-                )
+                input_data = pd.DataFrame([[q1,q2,q3,mid,fin,gpa,lec,lab]], 
+                                          columns=['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended'])
                 scaled = scaler_static.transform(input_data)
                 cluster_id = model_static.predict(scaled)[0]
                 res_cat = "Berisiko" if cluster_id == 2 else ("Menengah" if cluster_id == 1 else "Tinggi")
@@ -207,4 +170,4 @@ else:
             """, unsafe_allow_html=True)
 
 st.divider()
-st.caption("UAS Pemrograman AI - Stevanus - Built with Paired Dynamic K-Means Engine")
+st.caption("UAS Pemrograman AI - Stevanus - Built with Dynamic K-Means Engine")
