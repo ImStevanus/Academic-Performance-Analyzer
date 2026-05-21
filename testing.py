@@ -63,27 +63,41 @@ if menu == "🏠 Dashboard Analisis Dinamis":
         df = pd.read_csv(uploaded_file)
         df.columns = df.columns.str.strip().str.lower()
         
-        st.subheader("⚙️ Konfigurasi Re-Clustering")
-        st.write("Silakan pilih parameter. Sistem akan menghitung ulang klaster secara real-time:")
+        st.subheader("🎛️ Pengaturan Sumbu & Parameter Visualisasi")
+        st.write("Pilih parameter untuk Sumbu X dan Sumbu Y. Sistem akan langsung melakukan clustering dan memperbarui grafik & pie chart secara sinkron:")
         
         all_features = ['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
         available_features = [f for f in all_features if f in df.columns]
         
-        # Menggunakan on_change untuk memicu st.rerun() secara otomatis saat pilihan berubah
-        selected_features = st.multiselect(
-            "Pilih Parameter untuk Analisis Kelompok:",
-            options=available_features,
-            default=['midterm_marks', 'final_marks', 'lectures_attended'] if len(available_features) >= 3 else available_features[:2],
-            format_func=lambda x: x.replace('_', ' ').title(),
-            key="active_features_widget",
-            on_change=lambda: st.rerun() if hasattr(st, "rerun") else None
-        )
+        # DROP-DOWN UTAMA UNTUK SUMBU GRAFIK & BASIS CLUSTERING
+        c_select1, c_select2 = st.columns(2)
+        with c_select1:
+            x_axis = st.selectbox(
+                "Sumbu X Grafik & Parameter 1:",
+                options=available_features,
+                index=available_features.index('midterm_marks') if 'midterm_marks' in available_features else 0,
+                format_func=lambda x: x.replace('_', ' ').title(),
+                key="sb_x_ultimate",
+                on_change=lambda: st.rerun() if hasattr(st, "rerun") else None
+            )
+        with c_select2:
+            y_axis = st.selectbox(
+                "Sumbu Y Grafik & Parameter 2:",
+                options=available_features,
+                index=available_features.index('final_marks') if 'final_marks' in available_features else 0,
+                format_func=lambda x: x.replace('_', ' ').title(),
+                key="sb_y_ultimate",
+                on_change=lambda: st.rerun() if hasattr(st, "rerun") else None
+            )
 
-        if len(selected_features) < 2:
-            st.warning("⚠️ Pilih minimal 2 parameter agar sistem bisa melakukan kalkulasi ulang (Re-Clustering).")
+        # Mencegah error jika user memilih parameter sumbu X dan Y yang sama persis
+        if x_axis == y_axis:
+            st.error("⚠️ Sumbu X dan Sumbu Y tidak boleh menggunakan parameter yang sama. Silakan ganti salah satu parameter di atas.")
         else:
-            # --- PROSES DYNAMIC CLUSTERING ---
-            data_to_cluster = df[selected_features].fillna(df[selected_features].mean())
+            # --- PROSES DYNAMIC CLUSTERING BERDASARKAN PARAMETER VISUALISASI ---
+            # Model K-Means dilatih HANYA menggunakan 2 kolom pilihan visualisasi aktif
+            selected_pair = [x_axis, y_axis]
+            data_to_cluster = df[selected_pair].fillna(df[selected_pair].mean())
             
             scaler_dynamic = StandardScaler()
             scaled_dynamic = scaler_dynamic.fit_transform(data_to_cluster)
@@ -91,8 +105,8 @@ if menu == "🏠 Dashboard Analisis Dinamis":
             kmeans_dynamic = KMeans(n_clusters=3, random_state=42, n_init=10)
             df['cluster_dynamic'] = kmeans_dynamic.fit_predict(scaled_dynamic)
 
-            # Hitung ranking performa berdasarkan akumulasi nilai rata-rata dari parameter terpilih
-            cluster_scores = df.groupby('cluster_dynamic')[selected_features].mean().sum(axis=1).sort_values(ascending=False)
+            # Hitung ranking agar pembagian kelompok tetap konsisten (Nilai tertinggi = Hijau, Terendah = Merah)
+            cluster_scores = df.groupby('cluster_dynamic')[selected_pair].mean().sum(axis=1).sort_values(ascending=False)
             
             rank_map = {
                 cluster_scores.index[0]: "Tinggi", 
@@ -106,21 +120,15 @@ if menu == "🏠 Dashboard Analisis Dinamis":
             # --- PANEL RINGKASAN METRIK ---
             st.divider()
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total Mahasiswa", len(df))
-            if 'final_marks' in df.columns:
-                m2.metric("Rata-rata Final Exam", f"{df['final_marks'].mean():.1f}")
-            else:
-                m2.metric("Rata-rata Final Exam", "N/A")
-            m3.metric("Status Komputasi", "🔄 Hard Refreshed Live")
+            m1.metric("Total Data Mahasiswa", len(df))
+            m2.metric("Parameter Sumbu X", x_axis.replace('_', ' ').title())
+            m3.metric("Parameter Sumbu Y", y_axis.replace('_', ' ').title())
 
-            # --- PANEL VISUALISASI LIVE GRAPH ---
+            # --- PANEL VISUALISASI LIVE GRAPH (100% SINKRON) ---
             col_left, col_right = st.columns([6, 4])
             
             with col_left:
-                st.markdown("##### 📍 Sebaran Kelompok Berdasarkan Pilihan")
-                x_axis = st.selectbox("Sumbu X Grafik:", selected_features, index=0, key="sb_x_ultimate")
-                y_axis = st.selectbox("Sumbu Y Grafik:", selected_features, index=1 if len(selected_features) > 1 else 0, key="sb_y_ultimate")
-                
+                st.markdown("##### 📍 Sebaran Cluster Berdasarkan Pilihan Parameter")
                 fig = px.scatter(
                     df, x=x_axis, y=y_axis, color="label_live", 
                     template="none", 
@@ -135,7 +143,7 @@ if menu == "🏠 Dashboard Analisis Dinamis":
             with col_right:
                 st.markdown("##### 🥧 Proporsi Kelompok Mahasiswa (Up-to-Date)")
                 
-                # ISOLASI TOTAL: Membuat DataFrame baru yang independen khusus untuk pie chart
+                # Menghitung rangkuman data pie chart dari hasil clustering 2 sumbu di atas
                 pie_data = pd.DataFrame({
                     'Kelompok': df['label_live'].value_counts().index,
                     'Jumlah': df['label_live'].value_counts().values
@@ -154,7 +162,8 @@ if menu == "🏠 Dashboard Analisis Dinamis":
                 st.plotly_chart(fig_pie, use_container_width=True)
 
             st.subheader("📋 Eksplorasi Data Detail")
-            st.dataframe(df[selected_features + ['label_live']], use_container_width=True)
+            st.dataframe(df[selected_pair + ['label_live']], use_container_width=True)
+            
     else:
         st.info("Silakan unggah dataset CSV pada sidebar untuk memulai analisis dinamis.")
 
@@ -198,4 +207,4 @@ else:
             """, unsafe_allow_html=True)
 
 st.divider()
-st.caption("UAS Pemrograman AI - Stevanus - Built with Ultimate Anti-Cache Engine")
+st.caption("UAS Pemrograman AI - Stevanus - Built with Paired Dynamic K-Means Engine")
