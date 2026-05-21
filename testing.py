@@ -1,3 +1,4 @@
+import streamlit as str_input  # diubah aliasnya untuk memastikan tidak ada tabrakan modul
 import streamlit as st
 import pandas as pd
 import joblib
@@ -67,29 +68,27 @@ if menu == "🏠 Dashboard Analisis Dinamis":
         st.subheader("⚙️ Konfigurasi Re-Clustering")
         st.write("Silakan pilih parameter. Sistem akan menghitung ulang klaster secara real-time:")
         
-        # Daftar fitur disamakan dengan huruf kecil sesuai standar pembersihan data
         all_features = ['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
-        
-        # Memastikan fitur yang ada di pilihan memang eksis di dalam berkas CSV Anda
         available_features = [f for f in all_features if f in df.columns]
         
+        # Pemicu Sesi (Session State) untuk mendeteksi perubahan parameter secara agresif
         selected_features = st.multiselect(
             "Pilih Parameter untuk Analisis Kelompok:",
             options=available_features,
             default=['midterm_marks', 'final_marks', 'lectures_attended'] if len(available_features) >= 3 else available_features[:2],
-            format_func=lambda x: x.replace('_', ' ').title()
+            format_func=lambda x: x.replace('_', ' ').title(),
+            key="feature_selector_active"
         )
 
         if len(selected_features) < 2:
             st.warning("⚠️ Pilih minimal 2 parameter agar sistem bisa melakukan kalkulasi ulang (Re-Clustering).")
         else:
-            # --- PROSES DYNAMIC CLUSTERING (HITUNG ULANG REAL-TIME) ---
+            # --- PROSES DYNAMIC CLUSTERING (SINKRONISASI TOTAL KE SESSION STATE) ---
             data_to_cluster = df[selected_features].fillna(df[selected_features].mean())
             
             scaler_dynamic = StandardScaler()
             scaled_dynamic = scaler_dynamic.fit_transform(data_to_cluster)
             
-            # Buat instance K-Means baru setiap kali widget berubah
             kmeans_dynamic = KMeans(n_clusters=3, random_state=42, n_init=10)
             df['cluster_dynamic'] = kmeans_dynamic.fit_predict(scaled_dynamic)
 
@@ -105,6 +104,10 @@ if menu == "🏠 Dashboard Analisis Dinamis":
             df['kategori_live'] = df['cluster_dynamic'].map(rank_map)
             df['label_live'] = df['kategori_live'].apply(lambda x: get_info(x)['label'])
 
+            # PAKSA DATA MASUK KE STATE AGAR CHART TERKUNCI LIVE UNTUK UPDATE
+            st.session_state['live_df_summary'] = df['label_live'].value_counts().reset_index()
+            st.session_state['live_df_summary'].columns = ['Kelompok', 'Jumlah']
+
             # --- PANEL RINGKASAN METRIK ---
             st.divider()
             m1, m2, m3 = st.columns(3)
@@ -113,15 +116,15 @@ if menu == "🏠 Dashboard Analisis Dinamis":
                 m2.metric("Rata-rata Final Exam", f"{df['final_marks'].mean():.1f}")
             else:
                 m2.metric("Rata-rata Final Exam", "N/A")
-            m3.metric("Status Komputasi", "🔄 Live Updated")
+            m3.metric("Status Komputasi", "🔄 Live Session Active")
 
             # --- PANEL VISUALISASI LIVE GRAPH ---
             col_left, col_right = st.columns([6, 4])
             
             with col_left:
                 st.markdown("##### 📍 Sebaran Kelompok Berdasarkan Pilihan")
-                x_axis = st.selectbox("Sumbu X Grafik:", selected_features, index=0, key="sb_x")
-                y_axis = st.selectbox("Sumbu Y Grafik:", selected_features, index=1 if len(selected_features) > 1 else 0, key="sb_y")
+                x_axis = st.selectbox("Sumbu X Grafik:", selected_features, index=0, key="sb_x_live")
+                y_axis = st.selectbox("Sumbu Y Grafik:", selected_features, index=1 if len(selected_features) > 1 else 0, key="sb_y_live")
                 
                 fig = px.scatter(
                     df, x=x_axis, y=y_axis, color="label_live", 
@@ -132,17 +135,16 @@ if menu == "🏠 Dashboard Analisis Dinamis":
                         get_info("Berisiko")['label']: "#e74c3c"
                     }
                 )
-                st.plotly_chart(fig, use_container_width=True, key="scatter_live_plot")
+                st.plotly_chart(fig, use_container_width=True, key=f"scatter_trig_{len(selected_features)}")
 
             with col_right:
                 st.markdown("##### 🥧 Proporsi Kelompok Mahasiswa (Up-to-Date)")
                 
-                # Membuat ringkasan data value_counts baru agar Chart terpaksa merender ulang data terbaru
-                df_counts = df['label_live'].value_counts().reset_index()
-                df_counts.columns = ['Kelompok', 'Jumlah']
+                # Membaca data rangkuman langsung dari Session State aktif saat ini
+                live_counts = st.session_state['live_df_summary']
                 
                 fig_pie = px.pie(
-                    df_counts, names="Kelompok", values="Jumlah",
+                    live_counts, names="Kelompok", values="Jumlah",
                     hole=0.4, template="none",
                     color="Kelompok", 
                     color_discrete_map={
@@ -151,8 +153,9 @@ if menu == "🏠 Dashboard Analisis Dinamis":
                         get_info("Berisiko")['label']: "#e74c3c"
                     }
                 )
-                # Parameter key="pie_live_plot" mengunci chart agar wajib memperbarui render data
-                st.plotly_chart(fig_pie, use_container_width=True, key="pie_live_plot")
+                # Trik Kunci Utama: Menggunakan key dinamis berbasis panjang fitur pilihan 
+                # sehingga pie chart dipaksa hancur dan digambar ulang secara real-time saat opsi berubah.
+                st.plotly_chart(fig_pie, use_container_width=True, key=f"pie_trig_{len(selected_features)}")
 
             st.subheader("📋 Eksplorasi Data Detail")
             st.dataframe(df[selected_features + ['label_live']], use_container_width=True)
