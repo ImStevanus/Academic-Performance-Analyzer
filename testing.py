@@ -46,7 +46,7 @@ def get_info(cat):
     }
     return info.get(cat, {"label": "Unknown", "color": "#7f8c8d", "saran": "-"})
 
-# 5. FUNGSI DICTIONARY UNTUK EMOJI DAN FORMAT TEKS PARAMETER
+# 5. FUNGSI FORMAT NAMA PARAMETER BER-EMOJI
 def format_parameter_name(col_name):
     mapping = {
         "quiz1_marks": "📝 Nilai Quiz 1",
@@ -58,7 +58,6 @@ def format_parameter_name(col_name):
         "lectures_attended": "📅 Kehadiran Kuliah (Lectures)",
         "labs_attended": "🧪 Kehadiran Praktikum (Labs)"
     }
-    # Jika ada nama kolom lain di luar standar, otomatis diubah jadi Title Case
     return mapping.get(col_name, f"🔍 {col_name.replace('_', ' ').title()}")
 
 # 6. SIDEBAR
@@ -78,29 +77,25 @@ if menu == "🏠 Dashboard Analisis Dinamis":
         df = pd.read_csv(uploaded_file)
         df.columns = df.columns.str.strip().str.lower()
         
-        # Daftar fitur standar yang akan langsung otomatis diproses semuanya oleh sistem
         all_features = ['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
         available_features = [f for f in all_features if f in df.columns]
         
-        # --- PROSES DYNAMIC CLUSTERING OTOMATIS (MENGGUNAKAN SEMUA PARAMETER) ---
+        # --- PROSES DYNAMIC CLUSTERING OTOMATIS ---
         data_to_cluster = df[available_features].fillna(df[available_features].mean())
         scaler_dynamic = StandardScaler()
         scaled_dynamic = scaler_dynamic.fit_transform(data_to_cluster)
         
-        # Hitung ulang K-Means secara komprehensif
         kmeans_dynamic = KMeans(n_clusters=3, random_state=42, n_init=10)
         df['Cluster_Dynamic'] = kmeans_dynamic.fit_predict(scaled_dynamic)
 
-        # Mengurutkan cluster agar peringkat performa akurat (Nilai tertinggi total = Tinggi)
+        # Sorting cluster berdasarkan performa
         cluster_scores = df.groupby('Cluster_Dynamic')[available_features].mean().sum(axis=1).sort_values(ascending=False)
         rank_map = {cluster_scores.index[0]: "Tinggi", cluster_scores.index[1]: "Menengah", cluster_scores.index[2]: "Berisiko"}
         df['Kategori'] = df['Cluster_Dynamic'].map(rank_map)
         df['Label'] = df['Kategori'].apply(lambda x: get_info(x)['label'])
 
-        # --- SELEKSI SUMBU GRAFIK YANG SUDAH LENGKAP DENGAN EMOJI ---
-        st.subheader("🎛️ Eksplorasi Visualisasi Sumbu")
-        st.write("Silakan tentukan parameter yang ingin ditampilkan pada Sumbu X dan Sumbu Y grafik:")
-        
+        # --- DROP-DOWN SELEKSI SUMBU GRAFIK ---
+        st.subheader("🎛️ Pengaturan Sumbu Visualisasi")
         col_select1, col_select2 = st.columns(2)
         with col_select1:
             x_axis = st.selectbox(
@@ -123,11 +118,8 @@ if menu == "🏠 Dashboard Analisis Dinamis":
         st.divider()
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Mahasiswa", len(df))
-        if 'final_marks' in df.columns:
-            m2.metric("Rata-rata Final", f"{df['final_marks'].mean():.1f}")
-        else:
-            m2.metric("Rata-rata Final", "N/A")
-        m3.metric("Kategori Analisis", "3 Kelompok Aktif")
+        m2.metric("Sumbu X Terpilih", x_axis.split('_')[0].title())
+        m3.metric("Sumbu Y Terpilih", y_axis.split('_')[0].title())
 
         # --- PANEL VISUALISASI ---
         col_left, col_right = st.columns([6, 4])
@@ -142,17 +134,26 @@ if menu == "🏠 Dashboard Analisis Dinamis":
                                  get_info("Menengah")['label']: "#f1c40f",
                                  get_info("Berisiko")['label']: "#e74c3c"
                              })
-            st.plotly_chart(fig, use_container_width=True)
+            # Menggunakan key dinamis agar scatter plot refresh otomatis
+            st.plotly_chart(fig, use_container_width=True, key=f"scatter_{x_axis}_{y_axis}")
 
         with col_right:
-            st.markdown("##### 🥧 Proporsi Kelompok Mahasiswa")
-            fig_pie = px.pie(df, names="Label", hole=0.4, template="none",
-                             color="Label", color_discrete_map={
+            st.markdown("##### 🥧 Proporsi Kelompok Mahasiswa (Live Update)")
+            
+            # 🔥 TRIK UTAMA: Isolasi total rangkuman data ke DataFrame baru yang berdiri sendiri
+            pie_data = df['Label'].value_counts().reset_index()
+            pie_data.columns = ['Kelompok', 'Jumlah']
+            
+            fig_pie = px.pie(pie_data, names="Kelompok", values="Jumlah", hole=0.4, template="none",
+                             color="Kelompok", color_discrete_map={
                                  get_info("Tinggi")['label']: "#2ecc71",
                                  get_info("Menengah")['label']: "#f1c40f",
                                  get_info("Berisiko")['label']: "#e74c3c"
                              })
-            st.plotly_chart(fig_pie, use_container_width=True)
+            
+            # 🔥 KUNCI DINAMIS: Setiap kali sumbu diubah, key pie chart ikut berganti nama.
+            # Ini memaksa Streamlit menghancurkan gambar lama dan merender ulang proporsinya.
+            st.plotly_chart(fig_pie, use_container_width=True, key=f"pie_{x_axis}_{y_axis}")
 
         st.subheader("📋 Data Detail Lengkap")
         st.dataframe(df[available_features + ['Label']], use_container_width=True)
@@ -195,4 +196,4 @@ else:
             """, unsafe_allow_html=True)
 
 st.divider()
-st.caption("UAS Pemrograman AI - Stevanus - Built with Automatically Scored K-Means Engine")
+st.caption("UAS Pemrograman AI - Stevanus - Built with Fixed Dynamic Key Render Engine")
