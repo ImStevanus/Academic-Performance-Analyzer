@@ -1,4 +1,3 @@
-import streamlit as str_input  # diubah aliasnya untuk memastikan tidak ada tabrakan modul
 import streamlit as st
 import pandas as pd
 import joblib
@@ -61,7 +60,6 @@ if menu == "🏠 Dashboard Analisis Dinamis":
     st.title("📊 Dashboard Analisis Dinamis")
     
     if uploaded_file is not None:
-        # Membaca data dan langsung membersihkan spasi tak terlihat pada nama kolom
         df = pd.read_csv(uploaded_file)
         df.columns = df.columns.str.strip().str.lower()
         
@@ -71,19 +69,20 @@ if menu == "🏠 Dashboard Analisis Dinamis":
         all_features = ['quiz1_marks', 'quiz2_marks', 'quiz3_marks', 'midterm_marks', 'final_marks', 'previous_gpa', 'lectures_attended', 'labs_attended']
         available_features = [f for f in all_features if f in df.columns]
         
-        # Pemicu Sesi (Session State) untuk mendeteksi perubahan parameter secara agresif
+        # Menggunakan on_change untuk memicu st.rerun() secara otomatis saat pilihan berubah
         selected_features = st.multiselect(
             "Pilih Parameter untuk Analisis Kelompok:",
             options=available_features,
             default=['midterm_marks', 'final_marks', 'lectures_attended'] if len(available_features) >= 3 else available_features[:2],
             format_func=lambda x: x.replace('_', ' ').title(),
-            key="feature_selector_active"
+            key="active_features_widget",
+            on_change=lambda: st.rerun() if hasattr(st, "rerun") else None
         )
 
         if len(selected_features) < 2:
             st.warning("⚠️ Pilih minimal 2 parameter agar sistem bisa melakukan kalkulasi ulang (Re-Clustering).")
         else:
-            # --- PROSES DYNAMIC CLUSTERING (SINKRONISASI TOTAL KE SESSION STATE) ---
+            # --- PROSES DYNAMIC CLUSTERING ---
             data_to_cluster = df[selected_features].fillna(df[selected_features].mean())
             
             scaler_dynamic = StandardScaler()
@@ -104,10 +103,6 @@ if menu == "🏠 Dashboard Analisis Dinamis":
             df['kategori_live'] = df['cluster_dynamic'].map(rank_map)
             df['label_live'] = df['kategori_live'].apply(lambda x: get_info(x)['label'])
 
-            # PAKSA DATA MASUK KE STATE AGAR CHART TERKUNCI LIVE UNTUK UPDATE
-            st.session_state['live_df_summary'] = df['label_live'].value_counts().reset_index()
-            st.session_state['live_df_summary'].columns = ['Kelompok', 'Jumlah']
-
             # --- PANEL RINGKASAN METRIK ---
             st.divider()
             m1, m2, m3 = st.columns(3)
@@ -116,15 +111,15 @@ if menu == "🏠 Dashboard Analisis Dinamis":
                 m2.metric("Rata-rata Final Exam", f"{df['final_marks'].mean():.1f}")
             else:
                 m2.metric("Rata-rata Final Exam", "N/A")
-            m3.metric("Status Komputasi", "🔄 Live Session Active")
+            m3.metric("Status Komputasi", "🔄 Hard Refreshed Live")
 
             # --- PANEL VISUALISASI LIVE GRAPH ---
             col_left, col_right = st.columns([6, 4])
             
             with col_left:
                 st.markdown("##### 📍 Sebaran Kelompok Berdasarkan Pilihan")
-                x_axis = st.selectbox("Sumbu X Grafik:", selected_features, index=0, key="sb_x_live")
-                y_axis = st.selectbox("Sumbu Y Grafik:", selected_features, index=1 if len(selected_features) > 1 else 0, key="sb_y_live")
+                x_axis = st.selectbox("Sumbu X Grafik:", selected_features, index=0, key="sb_x_ultimate")
+                y_axis = st.selectbox("Sumbu Y Grafik:", selected_features, index=1 if len(selected_features) > 1 else 0, key="sb_y_ultimate")
                 
                 fig = px.scatter(
                     df, x=x_axis, y=y_axis, color="label_live", 
@@ -135,16 +130,19 @@ if menu == "🏠 Dashboard Analisis Dinamis":
                         get_info("Berisiko")['label']: "#e74c3c"
                     }
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"scatter_trig_{len(selected_features)}")
+                st.plotly_chart(fig, use_container_width=True)
 
             with col_right:
                 st.markdown("##### 🥧 Proporsi Kelompok Mahasiswa (Up-to-Date)")
                 
-                # Membaca data rangkuman langsung dari Session State aktif saat ini
-                live_counts = st.session_state['live_df_summary']
+                # ISOLASI TOTAL: Membuat DataFrame baru yang independen khusus untuk pie chart
+                pie_data = pd.DataFrame({
+                    'Kelompok': df['label_live'].value_counts().index,
+                    'Jumlah': df['label_live'].value_counts().values
+                })
                 
                 fig_pie = px.pie(
-                    live_counts, names="Kelompok", values="Jumlah",
+                    pie_data, names="Kelompok", values="Jumlah",
                     hole=0.4, template="none",
                     color="Kelompok", 
                     color_discrete_map={
@@ -153,9 +151,7 @@ if menu == "🏠 Dashboard Analisis Dinamis":
                         get_info("Berisiko")['label']: "#e74c3c"
                     }
                 )
-                # Trik Kunci Utama: Menggunakan key dinamis berbasis panjang fitur pilihan 
-                # sehingga pie chart dipaksa hancur dan digambar ulang secara real-time saat opsi berubah.
-                st.plotly_chart(fig_pie, use_container_width=True, key=f"pie_trig_{len(selected_features)}")
+                st.plotly_chart(fig_pie, use_container_width=True)
 
             st.subheader("📋 Eksplorasi Data Detail")
             st.dataframe(df[selected_features + ['label_live']], use_container_width=True)
@@ -202,4 +198,4 @@ else:
             """, unsafe_allow_html=True)
 
 st.divider()
-st.caption("UAS Pemrograman AI - Stevanus - Built with Fixed Dynamic K-Means Engine")
+st.caption("UAS Pemrograman AI - Stevanus - Built with Ultimate Anti-Cache Engine")
