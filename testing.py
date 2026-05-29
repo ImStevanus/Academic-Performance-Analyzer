@@ -13,6 +13,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
 import warnings
+import io
 warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────
@@ -613,8 +614,9 @@ def load_and_preprocess(file_obj):
     return df
 
 @st.cache_data
+@st.cache_data
 def run_clustering(df_json, features):
-    df = pd.read_json(df_json)
+    df = pd.read_json(io.StringIO(df_json))  
     data = df[list(features)].fillna(df[list(features)].mean())
     scaler = StandardScaler()
     scaled = scaler.fit_transform(data)
