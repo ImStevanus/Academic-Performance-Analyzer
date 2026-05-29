@@ -25,8 +25,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Initialize session state for welcome screen
+if 'started' not in st.session_state:
+    st.session_state.started = False
+
 # ─────────────────────────────────────────────
-# 2. GLOBAL CSS — Dark academic + clean cards
+# 2. GLOBAL CSS — Dark academic + Welcome Page UI/UX
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -197,8 +201,142 @@ hr { border-color: #21262d !important; }
 
 /* ─── Alert/warning ─── */
 .stAlert { border-radius: 10px !important; }
+
+/* ─── Welcome Page Custom CSS ─── */
+.welcome-container {
+    text-align: center;
+    max-width: 800px;
+    margin: 6% auto 2% auto;
+    padding: 40px;
+    background: radial-gradient(circle at top, rgba(56,189,248,0.05) 0%, transparent 80%);
+}
+.welcome-badge {
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    padding: 6px 16px;
+    border-radius: 30px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    display: inline-block;
+    margin-bottom: 24px;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+}
+.welcome-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 3.2rem;
+    font-weight: 800;
+    line-height: 1.15;
+    background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 20px;
+}
+.welcome-subtitle {
+    color: #8b949e;
+    font-size: 1.15rem;
+    line-height: 1.6;
+    margin-bottom: 40px;
+    font-weight: 300;
+}
+.welcome-footer {
+    margin-top: 80px;
+    font-size: 0.82rem;
+    color: #484f58;
+    border-top: 1px solid #21262d;
+    padding-top: 20px;
+}
+/* Style button center welcome screen */
+div.stButton > button:first-child {
+    background: linear-gradient(135deg, #38bdf8 0%, #1d4ed8 100%) !important;
+    color: #ffffff !important;
+    font-family: 'Syne', sans-serif !important;
+    font-weight: 700 !important;
+    padding: 14px 36px !important;
+    font-size: 1.05rem !important;
+    border-radius: 12px !important;
+    border: none !important;
+    box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3) !important;
+    transition: transform 0.2s, box-shadow 0.2s !important;
+}
+div.stButton > button:first-child:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 26px rgba(56, 189, 248, 0.4) !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
+# WELCOME INTERACTIVE SCREEN (UPDATED UI/UX)
+# ─────────────────────────────────────────────
+if not st.session_state.started:
+    # Sembunyikan sidebar di halaman sambutan agar fokus ke tengah
+    st.markdown("""<style>[data-testid="stSidebar"] { display: none !important; }</style>""", unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="welcome-container" style="margin-top: 3%;">
+        <div class="welcome-badge">📊 PROYEK UAS PEMROGRAMAN AI</div>
+        <div class="welcome-title">Academic Performance<br>Cluster Analyzer</div>
+        <div class="welcome-subtitle">
+            Sistem cerdas berbasis Machine Learning menggunakan algoritma <b>K-Means Clustering</b> 
+            untuk segmentasi data akademik, pemetaan profil, dan deteksi dini risiko performa mahasiswa secara presisi.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 🌟 TAMBAHAN 1: Quick Stats Box (Bento Grid Style)
+    st.markdown("""
+    <div style="max-width: 850px; margin: 0 auto 40px auto;">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+            <div style="background: #161b22; border: 1px solid #21262d; padding: 16px; border-radius: 12px; text-align: center;">
+                <div style="font-size: 1.5rem;">📁</div>
+                <div style="font-size: 0.8rem; color: #8b949e; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Dataset Batasan</div>
+                <div style="font-weight: 700; color: #e2e8f0; margin-top: 2px;">300 Mahasiswa / 16 Fitur</div>
+            </div>
+            <div style="background: #161b22; border: 1px solid #21262d; padding: 16px; border-radius: 12px; text-align: center;">
+                <div style="font-size: 1.5rem;">🤖</div>
+                <div style="font-size: 0.8rem; color: #8b949e; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Algoritma Inti</div>
+                <div style="font-weight: 700; color: #38bdf8; margin-top: 2px;">K-Means Clustering</div>
+            </div>
+            <div style="background: #161b22; border: 1px solid #21262d; padding: 16px; border-radius: 12px; text-align: center;">
+                <div style="font-size: 1.5rem;">🎯</div>
+                <div style="font-size: 0.8rem; color: #8b949e; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Target Output</div>
+                <div style="font-weight: 700; color: #4ade80; margin-top: 2px;">3 Klaster Akademik</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Tombol Mulai di Tengah Layar
+    c_left, c_mid, c_right = st.columns([2, 1.2, 2])
+    with c_mid:
+        if st.button("Mulai Analisis Sistem 🚀", use_container_width=True):
+            st.session_state.started = True
+            st.rerun()
+            
+    # 🌟 TAMBAHAN 2: Workflow singkat di bawah tombol
+    st.markdown("""
+    <div style="max-width: 600px; margin: 40px auto 0 auto; text-align: center;">
+        <p style="font-size: 0.82rem; color: #8b949e; margin-bottom: 12px; letter-spacing: 0.05em; text-transform: uppercase;">Alur Kerja Aplikasi</p>
+        <div style="display: flex; justify-content: center; align-items: center; gap: 12px; color: #484f58; font-size: 0.88rem;">
+            <span style="color: #c9d1d9;">1. Unggah CSV</span>
+            <span>➔</span>
+            <span style="color: #c9d1d9;">2. Analisis Klaster Eksploratif</span>
+            <span>➔</span>
+            <span style="color: #c9d1d9;">3. Prediksi Real-Time</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+            
+    st.markdown(f"""
+    <div class="welcome-container" style="margin-top: 0px; padding-top: 20px;">
+        <div class="welcome-footer">
+            Dibuat oleh: <b>Stevanus</b> &nbsp;·&nbsp; NIM: <b>38250029</b> &nbsp;·&nbsp; Prodi: <b>Artificial Intelligence</b>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
 
 # ─────────────────────────────────────────────
@@ -251,7 +389,7 @@ def cluster_card(cat, count, pct):
 
 
 # ─────────────────────────────────────────────
-# 4. SIDEBAR
+# 4. SIDEBAR (Hanya muncul jika sudah klik Mulai)
 # ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
@@ -278,6 +416,11 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload CSV", type="csv", label_visibility="collapsed")
     if uploaded_file:
         st.success("✅ Dataset berhasil dimuat")
+        
+    st.divider()
+    if st.button("↩️ Halaman Utama", use_container_width=True):
+        st.session_state.started = False
+        st.rerun()
 
 
 # ─────────────────────────────────────────────
@@ -287,7 +430,6 @@ with st.sidebar:
 def load_and_preprocess(file_obj):
     df = pd.read_csv(file_obj)
     df.columns = df.columns.str.strip().str.lower()
-    # Handle missing assignments_submitted
     if 'assignments_submitted' in df.columns:
         df['assignments_submitted'] = df['assignments_submitted'].fillna(df.get('total_assignments', pd.Series()).median())
     return df
@@ -299,12 +441,10 @@ def run_clustering(df_json, features):
     scaler = StandardScaler()
     scaled = scaler.fit_transform(data)
 
-    # Elbow / optimal k (3 clusters per UAS spec)
     kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
     labels = kmeans.fit_predict(scaled)
     sil = silhouette_score(scaled, labels) if len(set(labels)) > 1 else 0
 
-    # Rank clusters by mean score sum (highest = Tinggi)
     df2 = df.copy()
     df2['_cluster'] = labels
     scores = df2.groupby('_cluster')[list(features)].mean().sum(axis=1).sort_values(ascending=False)
@@ -336,7 +476,6 @@ if menu == "📊 Dashboard Analisis":
     df_raw = load_and_preprocess(uploaded_file)
     available = [f for f in ALL_FEATURES if f in df_raw.columns]
 
-    # ── Axis selector ──────────────────────────────────────────
     st.markdown("<div class='section-title'>🎛️ Konfigurasi Sumbu Visualisasi & Clustering</div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
@@ -352,11 +491,9 @@ if menu == "📊 Dashboard Analisis":
         st.error("⚠️ Sumbu X dan Y tidak boleh sama. Pilih parameter berbeda.")
         st.stop()
 
-    # Model dilatih khusus pada koordinat X dan Y yang aktif secara dinamis
     cluster_features = [x_axis, y_axis]
     df_clustered, sil_score, _, _ = run_clustering(df_raw.to_json(), cluster_features)
 
-    # ── Top metrics ────────────────────────────────────────────
     st.markdown("---")
     total = len(df_clustered)
     counts = df_clustered['Kategori'].value_counts()
@@ -378,7 +515,6 @@ if menu == "📊 Dashboard Analisis":
 
     st.markdown("<div style='margin-top:6px;font-size:0.8rem;color:#8b949e;'>Silhouette Score (kualitas cluster): <b style='color:#38bdf8;'>{:.4f}</b> — Nilai mendekati 1.0 menandakan cluster yang sangat baik.</div>".format(sil_score), unsafe_allow_html=True)
 
-    # ── Charts row ─────────────────────────────────────────────
     st.markdown("---")
     tab1, tab2, tab3 = st.tabs(["📍 Scatter Plot", "🥧 Distribusi Kelompok (Live Update)", "📊 Statistik per Kelompok"])
 
@@ -433,7 +569,6 @@ if menu == "📊 Dashboard Analisis":
         stat_df.columns = [f"{col[1].upper()} {fmt(col[0])}" for col in stat_df.columns]
         st.dataframe(stat_df, use_container_width=True)
 
-    # ── Data table ─────────────────────────────────────────────
     st.markdown("---")
     st.markdown("<div class='section-title'>🗂️ Tabel Data Mahasiswa & Hasil Cluster</div>", unsafe_allow_html=True)
     show_cols = (['name'] if 'name' in df_clustered.columns else []) + ['Kategori', 'Label'] + available
@@ -460,7 +595,6 @@ elif menu == "🔍 Prediksi Individu":
     df_raw = load_and_preprocess(uploaded_file)
     available = [f for f in ALL_FEATURES if f in df_raw.columns]
 
-    # Latih model komprehensif pada semua fitur yang tersedia
     df_trained, _, _, scaler_fit = run_clustering(df_raw.to_json(), available)
 
     st.markdown("<div class='section-title'>✍️ Input Data Mahasiswa</div>", unsafe_allow_html=True)
@@ -475,7 +609,6 @@ elif menu == "🔍 Prediksi Individu":
         target_col = cols_left if i % 2 == 0 else cols_right
         
         with target_col:
-            # ANTISIPASI ERROR: Jika min_value == max_value (data seragam), ganti widget slider ke number_input
             if col_min == col_max:
                 input_vals[feat] = st.number_input(
                     f"{meta.get('icon','🔹')} {meta.get('label', feat)} ({meta.get('unit','')})",
@@ -497,7 +630,6 @@ elif menu == "🔍 Prediksi Individu":
         input_arr = np.array([[input_vals[f] for f in available]])
         scaled_input = scaler_fit.transform(input_arr)
 
-        # Melatih ulang K-Means internal untuk keperluan prediksi pencocokan klaster
         all_features_data = df_raw[available].fillna(df_raw[available].mean())
         scaler2 = StandardScaler()
         scaled_all = scaler2.fit_transform(all_features_data)
@@ -526,7 +658,6 @@ elif menu == "🔍 Prediksi Individu":
         </div>
         """, unsafe_allow_html=True)
 
-        # Radar Chart visualisasi komparasi input pengguna vs rata-rata klaster data latih
         cluster_means = df_trained.groupby('Kategori')[available].mean()
         categories = [fmt(f) for f in available]
         fig_radar = go.Figure()
@@ -538,7 +669,6 @@ elif menu == "🔍 Prediksi Individu":
                 name=cm['label'], fill='toself', opacity=0.25,
                 line=dict(color=cm['color'], width=2)
             ))
-        # Plot titik data input user saat ini
         user_vals = [input_vals[f] for f in available]
         fig_radar.add_trace(go.Scatterpolar(
             r=user_vals + [user_vals[0]],
