@@ -6,3 +6,4 @@ seaborn
 plotly
 st-gsheets-connection
 joblib
+numpy
