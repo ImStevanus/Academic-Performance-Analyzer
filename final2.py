@@ -15,6 +15,8 @@ from sklearn.metrics import silhouette_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
 import warnings
+import io  # Ditambahkan untuk memperbaiki bug StringIO pd.read_json
+import warnings
 warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────
@@ -594,7 +596,7 @@ with st.sidebar:
     
     # ── DROPDOWN OVERRIDE OTOMATIS / BLACKLIST SYARAT KAMPUS ──
     st.divider()
-    st.markdown("<div style='font-size:0.75rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted);'>Aturan Academic Kampus</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.75rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted);'>Aturan Akademik Kampus</div>", unsafe_allow_html=True)
     with st.expander("🛑 Aturan Override Otomatis", expanded=False):
         is_override_enabled = st.checkbox("Aktifkan Gerbang Blacklist", value=False)
         override_feature = st.selectbox("Parameter Kunci:", ["lectures_attended", "labs_attended", "assignments_submitted"], format_func=fmt)
@@ -624,7 +626,8 @@ def load_and_preprocess(file_obj):
     return df
 
 def run_clustering_with_weights(df_json, features, w_att, w_ex, w_qz, w_gp, override_active, ov_feat, ov_limit):
-    df = pd.read_json(df_json)
+    # FIX INDIKATOR BUG: io.StringIO dipasang untuk mencegah FileNotFoundError di Streamlit Cloud
+    df = pd.read_json(io.StringIO(df_json))
     data = df[list(features)].fillna(df[list(features)].mean())
     
     scaler = StandardScaler()
@@ -686,7 +689,6 @@ if menu == "📊 Dashboard Analisis":
         st.warning("⚠️ Analisis Dashboard dikunci. Silakan sesuaikan Bobot Fitur di sidebar agar berjumlah pas 100%.")
         st.stop()
 
-    # PILOT: Sementara Loading dilepas untuk debugging Streamlit Cloud
     df_raw = load_and_preprocess(uploaded_file)
     available = [f for f in ALL_FEATURES if f in df_raw.columns]
 
@@ -936,7 +938,6 @@ elif menu == "🔍 Prediksi Individu":
     st.markdown("---")
     
     if st.button("🔍 Prediksi Kelompok", type="primary", use_container_width=True):
-        # PILOT: Sementara Loading dilepas untuk debugging Streamlit Cloud
         all_data = df_raw[available].fillna(df_raw[available].mean())
         
         f_att = w_attendance / 100.0
