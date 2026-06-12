@@ -15,8 +15,8 @@ from sklearn.metrics import silhouette_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
 import warnings
-import io  # Ditambahkan untuk memperbaiki bug StringIO pd.read_json
-import warnings
+import io
+import time
 warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────
@@ -33,7 +33,7 @@ if 'started' not in st.session_state:
     st.session_state.started = False
 
 # ─────────────────────────────────────────────
-# 2. GLOBAL CSS — CLEAN ADAPTIVE THEME
+# 2. GLOBAL CSS — CLEAN ADAPTIVE THEME & KUSTOM FULLSCREEN LOADING
 # ─────────────────────────────────────────────
 st.markdown("""
     <style>
@@ -422,7 +422,109 @@ st.markdown("""
         border-radius: 12px !important;
     }
 
+    /* ────────────────────────────────────────────────────────
+       🔥 KUSTOM BLUR & FULLSCREEN LOADING (Layar Meredup + Icon Muter)
+       ──────────────────────────────────────────────────────── */
+    .custom-loader-overlay {
+        position: fixed;
+        top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(13, 17, 23, 0.75);
+        backdrop-filter: blur(4px);
+        z-index: 999999;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loader-container {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .academic-spinner {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        border: 4px solid transparent;
+        border-top: 4px solid var(--accent);
+        border-bottom: 4px solid var(--accent);
+        border-radius: 50%;
+        animation: spin-clockwise 1.2s linear infinite;
+    }
+
+    .academic-spinner-outer {
+        position: absolute;
+        width: 124px;
+        height: 124px;
+        border: 2px solid transparent;
+        border-left: 2px solid var(--text-muted);
+        border-right: 2px solid var(--text-muted);
+        border-radius: 50%;
+        animation: spin-counter-clockwise 3s linear infinite;
+    }
+
+    .academic-icon-center {
+        font-size: 2.5rem;
+        animation: pulse-icon 1.5s ease-in-out infinite;
+        z-index: 10;
+        user-select: none;
+    }
+
+    .loader-text {
+        font-family: 'Syne', sans-serif;
+        color: var(--text-primary);
+        font-weight: 700;
+        font-size: 1.05rem;
+        margin-top: 24px;
+        letter-spacing: 0.03em;
+        text-align: center;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+
+    .loader-subtext {
+        font-family: 'DM Sans', sans-serif;
+        color: var(--accent);
+        font-size: 0.82rem;
+        margin-top: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    @keyframes spin-clockwise {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    @keyframes spin-counter-clockwise {
+        0% { transform: rotate(360deg); }
+        100% { transform: rotate(0deg); }
+    }
+    @keyframes pulse-icon {
+        0%, 100% { transform: scale(1); opacity: 0.9; }
+        50% { transform: scale(1.15); opacity: 1; filter: drop-shadow(0 0 12px var(--accent)); }
+    }
+
     </style>
+    """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────
+# CUSTOM FULLSCREEN SPINNER WRAPPER FUNCTION
+# ─────────────────────────────────────────────
+def academic_loading_screen(status_text, sub_text="PROCESSING CORE ENGINE"):
+    return st.markdown(f"""
+        <div class="custom-loader-overlay">
+            <div class="loader-container">
+                <div class="academic-spinner-outer"></div>
+                <div class="academic-spinner"></div>
+                <div class="academic-icon-center">🎓</div>
+            </div>
+            <div class="loader-text">{status_text}</div>
+            <div class="loader-subtext">🧬 {sub_text}</div>
+        </div>
     """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
@@ -510,9 +612,9 @@ CLUSTER_META = {
     "Menengah": {"label": "📊 Steady Performer", "color": "#f59e0b", "bg": "rgba(245,158,11,0.08)", "border": "rgba(245,158,11,0.25)",
                  "saran": "Optimalkan konsistensi ujian komparatif dan submisi tugas agar menembus klaster utama."},
     "Berisiko": {"label": "⚠️ Needs Support",    "color": "#ef4444", "bg": "rgba(239,68,68,0.08)", "border": "rgba(239,68,68,0.25)",
-                 "saran": "Perlu bimbingan intensif reguler bersama Penasihat Akademik (PA) sesegera mungkin."},
+                 "saran": "Perlu bimbingan akademik intensif. Hubungi dosen PA sesegera mungkin."},
     "Override_Berisiko": {"label": "🛑 HARD OVERRIDE: Blacklist", "color": "#ef4444", "bg": "rgba(239,68,68,0.15)", "border": "#ef4444",
-                 "saran": "OTOMATIS TIDAK MEMENUHI SYARAT KELAYAKAN UJIAN KAMPUS. Angka akumulasi parameter berada di zona batas kritis (0 - 3)."}
+                 "saran": "TIDAK MEMENUHI SYARAT KELAYAKAN UJIAN KAMPUS. Kehadiran berada di rentang kritis bawah (0 - 3)."}
 }
 
 def get_plotly_theme():
@@ -626,7 +728,6 @@ def load_and_preprocess(file_obj):
     return df
 
 def run_clustering_with_weights(df_json, features, w_att, w_ex, w_qz, w_gp, override_active, ov_feat, ov_limit):
-    # FIX INDIKATOR BUG: io.StringIO dipasang untuk mencegah FileNotFoundError di Streamlit Cloud
     df = pd.read_json(io.StringIO(df_json))
     data = df[list(features)].fillna(df[list(features)].mean())
     
@@ -689,7 +790,14 @@ if menu == "📊 Dashboard Analisis":
         st.warning("⚠️ Analisis Dashboard dikunci. Silakan sesuaikan Bobot Fitur di sidebar agar berjumlah pas 100%.")
         st.stop()
 
-    df_raw = load_and_preprocess(uploaded_file)
+    # ANIMASI 1: Loading berkas data set baru (3 Detik)
+    placeholder_load = st.empty()
+    with placeholder_load:
+        academic_loading_screen("Membaca Dataset & Membersihkan Inkonsistensi Data...", "INGESTING DATASET")
+        df_raw = load_and_preprocess(uploaded_file)
+        time.sleep(3.0)
+    placeholder_load.empty()
+
     available = [f for f in ALL_FEATURES if f in df_raw.columns]
 
     st.markdown("<div class='section-title'>🎛️ Konfigurasi Sumbu Visualisasi</div>", unsafe_allow_html=True)
@@ -707,10 +815,17 @@ if menu == "📊 Dashboard Analisis":
         st.stop()
 
     cluster_features = [x_axis, y_axis]
-    df_clustered, sil_score, _, _ = run_clustering_with_weights(
-        df_raw.to_json(), cluster_features, w_attendance, w_exams, w_quizzes, w_gpa,
-        is_override_enabled, override_feature, max_violation_limit
-    )
+    
+    # ANIMASI 2: Loading ubah koordinat sumbu (3 Detik)
+    placeholder_axis = st.empty()
+    with placeholder_axis:
+        academic_loading_screen("Mengonfigurasi Matriks Ruang Fitur & Koordinat...", "RE-INDEXING AXIS COMPONENT")
+        df_clustered, sil_score, _, _ = run_clustering_with_weights(
+            df_raw.to_json(), cluster_features, w_attendance, w_exams, w_quizzes, w_gpa,
+            is_override_enabled, override_feature, max_violation_limit
+        )
+        time.sleep(3.0)
+    placeholder_axis.empty()
 
     # ── Metric cards ──
     st.markdown("---")
@@ -938,69 +1053,78 @@ elif menu == "🔍 Prediksi Individu":
     st.markdown("---")
     
     if st.button("🔍 Prediksi Kelompok", type="primary", use_container_width=True):
-        all_data = df_raw[available].fillna(df_raw[available].mean())
         
-        f_att = w_attendance / 100.0
-        f_ex = w_exams / 100.0
-        f_qz = w_quizzes / 100.0
-        f_gp = w_gpa / 100.0
-        
-        scaled_all_df = pd.DataFrame(StandardScaler().fit_transform(all_data), columns=available)
-        for col in available:
-            if 'attended' in col or 'submitted' in col: scaled_all_df[col] *= f_att
-            elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_all_df[col] *= f_ex
-            elif 'quiz' in col: scaled_all_df[col] *= f_qz
-            elif 'gpa' in col: scaled_all_df[col] *= f_gp
+        # ANIMASI 3: Fullscreen Loading 3 Detik (DIKEMBALIKAN UNTUK PRODUCTION)
+        placeholder_predict = st.empty()
+        with placeholder_predict:
+            academic_loading_screen("Menghitung Jarak Centroid & Inferensi Aturan Akademik...", "RUNNING OVERRIDE GATE & K-MEANS ENGINE")
             
-        km = KMeans(n_clusters=3, random_state=42, n_init=10)
-        km.fit(scaled_all_df.values)
-
-        tmp = all_data.copy()
-        tmp['_cluster'] = km.labels_
-        rank = tmp.groupby('_cluster')[available].mean().sum(axis=1).sort_values(ascending=False)
-        rank_map = {rank.index[0]: "Tinggi", rank.index[1]: "Menengah", rank.index[2]: "Berisiko"}
-
-        input_df = pd.DataFrame([input_vals])
-        scaler_global = StandardScaler().fit(all_data)
-        scaled_input = scaler_global.transform(input_df)
-        scaled_input_df = pd.DataFrame(scaled_input, columns=available)
-        for col in available:
-            if 'attended' in col or 'submitted' in col: scaled_input_df[col] *= f_att
-            elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_input_df[col] *= f_ex
-            elif 'quiz' in col: scaled_input_df[col] *= f_qz
-            elif 'gpa' in col: scaled_input_df[col] *= f_gp
-
-        pred = km.predict(scaled_input_df.values)[0]
-        kategori = rank_map[pred]
-        
-        hit_blacklist_a = False
-        if is_override_enabled and (override_feature in input_vals):
-            if input_vals[override_feature] <= max_violation_limit:
-                hit_blacklist_a = True
-        
-        if hit_blacklist_a: kategori = "Override_Berisiko"
-        m = CLUSTER_META.get(kategori, CLUSTER_META["Berisiko"])
-        
-        if is_compare_mode:
-            input_df_b = pd.DataFrame([input_vals_b])
-            scaled_input_b = scaler_global.transform(input_df_b)
-            scaled_input_df_b = pd.DataFrame(scaled_input_b, columns=available)
+            all_data = df_raw[available].fillna(df_raw[available].mean())
+            
+            f_att = w_attendance / 100.0
+            f_ex = w_exams / 100.0
+            f_qz = w_quizzes / 100.0
+            f_gp = w_gpa / 100.0
+            
+            scaled_all_df = pd.DataFrame(StandardScaler().fit_transform(all_data), columns=available)
             for col in available:
-                if 'attended' in col or 'submitted' in col: scaled_input_df_b[col] *= f_att
-                elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_input_df_b[col] *= f_ex
-                elif 'quiz' in col: scaled_input_df_b[col] *= f_qz
-                elif 'gpa' in col: scaled_input_df_b[col] *= f_gp
+                if 'attended' in col or 'submitted' in col: scaled_all_df[col] *= f_att
+                elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_all_df[col] *= f_ex
+                elif 'quiz' in col: scaled_all_df[col] *= f_qz
+                elif 'gpa' in col: scaled_all_df[col] *= f_gp
                 
-            pred_b = km.predict(scaled_input_df_b.values)[0]
-            kategori_b = rank_map[pred_b]
+            km = KMeans(n_clusters=3, random_state=42, n_init=10)
+            km.fit(scaled_all_df.values)
+
+            tmp = all_data.copy()
+            tmp['_cluster'] = km.labels_
+            rank = tmp.groupby('_cluster')[available].mean().sum(axis=1).sort_values(ascending=False)
+            rank_map = {rank.index[0]: "Tinggi", rank.index[1]: "Menengah", rank.index[2]: "Berisiko"}
+
+            input_df = pd.DataFrame([input_vals])
+            scaler_global = StandardScaler().fit(all_data)
+            scaled_input = scaler_global.transform(input_df)
+            scaled_input_df = pd.DataFrame(scaled_input, columns=available)
+            for col in available:
+                if 'attended' in col or 'submitted' in col: scaled_input_df[col] *= f_att
+                elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_input_df[col] *= f_ex
+                elif 'quiz' in col: scaled_input_df[col] *= f_qz
+                elif 'gpa' in col: scaled_input_df[col] *= f_gp
+
+            pred = km.predict(scaled_input_df.values)[0]
+            kategori = rank_map[pred]
             
-            hit_blacklist_b = False
-            if is_override_enabled and (override_feature in input_vals_b):
-                if input_vals_b[override_feature] <= max_violation_limit:
-                    hit_blacklist_b = True
+            hit_blacklist_a = False
+            if is_override_enabled and (override_feature in input_vals):
+                if input_vals[override_feature] <= max_violation_limit:
+                    hit_blacklist_a = True
             
-            if hit_blacklist_b: kategori_b = "Override_Berisiko"
-            m_b = CLUSTER_META.get(kategori_b, CLUSTER_META["Berisiko"])
+            if hit_blacklist_a: kategori = "Override_Berisiko"
+            m = CLUSTER_META.get(kategori, CLUSTER_META["Berisiko"])
+            
+            if is_compare_mode:
+                input_df_b = pd.DataFrame([input_vals_b])
+                scaled_input_b = scaler_global.transform(input_df_b)
+                scaled_input_df_b = pd.DataFrame(scaled_input_b, columns=available)
+                for col in available:
+                    if 'attended' in col or 'submitted' in col: scaled_input_df_b[col] *= f_att
+                    elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_input_df_b[col] *= f_ex
+                    elif 'quiz' in col: scaled_input_df_b[col] *= f_qz
+                    elif 'gpa' in col: scaled_input_df_b[col] *= f_gp
+                    
+                pred_b = km.predict(scaled_input_df_b.values)[0]
+                kategori_b = rank_map[pred_b]
+                
+                hit_blacklist_b = False
+                if is_override_enabled and (override_feature in input_vals_b):
+                    if input_vals_b[override_feature] <= max_violation_limit:
+                        hit_blacklist_b = True
+                
+                if hit_blacklist_b: kategori_b = "Override_Berisiko"
+                m_b = CLUSTER_META.get(kategori_b, CLUSTER_META["Berisiko"])
+                
+            time.sleep(3.0)
+        placeholder_predict.empty()
 
         # ─────────────────────────────────────────────
         # SUB-FUNGSI: SMART IMPROVEMENT ADVICE
