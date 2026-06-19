@@ -423,7 +423,7 @@ st.markdown("""
     }
 
     /* ────────────────────────────────────────────────────────
-       BLUR & FULLSCREEN LOADING 
+       BLUR & FULLSCREEN LOADING KUBUS 3D 
        ──────────────────────────────────────────────────────── */
     .custom-loader-overlay {
         position: fixed;
@@ -437,43 +437,58 @@ st.markdown("""
         align-items: center;
     }
 
-    .loader-container {
-        position: relative;
-        width: 120px;
-        height: 120px;
+    @keyframes spin3D {
+        0% { transform: rotateY(0deg) rotateX(0deg); }
+        100% { transform: rotateY(360deg) rotateX(360deg); }
+    }
+    @keyframes fadeInOverlay {
+        from { opacity: 0; backdrop-filter: blur(0px); }
+        to { opacity: 1; backdrop-filter: blur(4px); }
+    }
+    .custom-loader-overlay {
+        animation: fadeInOverlay 0.4s ease forwards;
+    }
+    .cube-3d-container {
+        perspective: 1000px;
+        width: 150px;
+        height: 150px;
+        margin: 40px auto;
         display: flex;
         justify-content: center;
         align-items: center;
     }
-
-    .academic-spinner {
+    .cube-3d {
+        width: 120px;
+        height: 120px;
+        position: relative;
+        transform-style: preserve-3d;
+        animation: spin3D 6s infinite linear;
+    }
+    .cube-face {
         position: absolute;
-        width: 100px;
-        height: 100px;
-        border: 4px solid transparent;
-        border-top: 4px solid var(--accent);
-        border-bottom: 4px solid var(--accent);
-        border-radius: 50%;
-        animation: spin-clockwise 1.2s linear infinite;
+        width: 120px;
+        height: 120px;
+        background: rgba(56, 189, 248, 0.18);
+        border: 2px solid #38bdf8;
+        color: #e2e8f0;
+        font-family: 'Syne', sans-serif;
+        font-size: 0.85rem;
+        font-weight: bold;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        border-radius: 8px;
+        box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+        backdrop-filter: blur(2px);
     }
-
-    .academic-spinner-outer {
-        position: absolute;
-        width: 124px;
-        height: 124px;
-        border: 2px solid transparent;
-        border-left: 2px solid var(--text-muted);
-        border-right: 2px solid var(--text-muted);
-        border-radius: 50%;
-        animation: spin-counter-clockwise 3s linear infinite;
-    }
-
-    .academic-icon-center {
-        font-size: 2.5rem;
-        animation: pulse-icon 1.5s ease-in-out infinite;
-        z-index: 10;
-        user-select: none;
-    }
+    .front  { transform: translateZ(60px); }
+    .back   { transform: rotateY(180deg) translateZ(60px); }
+    .left   { transform: rotateY(-90deg) translateZ(60px); }
+    .right  { transform: rotateY(90deg) translateZ(60px); }
+    .top    { transform: rotateX(90deg) translateZ(60px); }
+    .bottom { transform: rotateX(-90deg) translateZ(60px); }
 
     .loader-text {
         font-family: 'Syne', sans-serif;
@@ -495,19 +510,6 @@ st.markdown("""
         letter-spacing: 0.08em;
     }
 
-    @keyframes spin-clockwise {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    @keyframes spin-counter-clockwise {
-        0% { transform: rotate(360deg); }
-        100% { transform: rotate(0deg); }
-    }
-    @keyframes pulse-icon {
-        0%, 100% { transform: scale(1); opacity: 0.9; }
-        50% { transform: scale(1.15); opacity: 1; filter: drop-shadow(0 0 12px var(--accent)); }
-    }
-
     </style>
     """, unsafe_allow_html=True)
 
@@ -518,12 +520,17 @@ st.markdown("""
 def academic_loading_screen(status_text, sub_text="PROCESSING CORE ENGINE"):
     return st.markdown(f"""
         <div class="custom-loader-overlay">
-            <div class="loader-container">
-                <div class="academic-spinner-outer"></div>
-                <div class="academic-spinner"></div>
-                <div class="academic-icon-center">🎓</div>
+            <div class="cube-3d-container">
+                <div class="cube-3d">
+                    <div class="cube-face front"><span>📝</span><br>KUIS</div>
+                    <div class="cube-face back"><span>📊</span><br>UJIAN</div>
+                    <div class="cube-face left"><span>📅</span><br>ABSEN</div>
+                    <div class="cube-face right"><span>📂</span><br>TUGAS</div>
+                    <div class="cube-face top"><span>📈</span><br>IPK</div>
+                    <div class="cube-face bottom"><span>🤖</span><br>AI ENGINE</div>
+                </div>
             </div>
-            <div class="loader-text">{status_text}</div>
+            <div class="loader-text" style="margin-top:40px;">{status_text}</div>
             <div class="loader-subtext">🧬 {sub_text}</div>
         </div>
     """, unsafe_allow_html=True)
@@ -574,61 +581,6 @@ if not st.session_state.started:
         with c2:
             if st.button("Mulai Analisis 🚀", use_container_width=True):
                 welcome_container.markdown("""
-                    <style>
-                    @keyframes spin3D {
-                        0% { transform: rotateY(0deg) rotateX(0deg); }
-                        100% { transform: rotateY(360deg) rotateX(360deg); }
-                    }
-                    @keyframes fadeInOverlay {
-                        from { opacity: 0; backdrop-filter: blur(0px); }
-                        to { opacity: 1; backdrop-filter: blur(4px); }
-                    }
-                    .custom-loader-overlay {
-                        animation: fadeInOverlay 0.4s ease forwards;
-                    }
-                    .cube-3d-container {
-                        perspective: 1000px;
-                        width: 150px;
-                        height: 150px;
-                        margin: 40px auto;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                    }
-                    .cube-3d {
-                        width: 120px;
-                        height: 120px;
-                        position: relative;
-                        transform-style: preserve-3d;
-                        animation: spin3D 6s infinite linear;
-                    }
-                    .cube-face {
-                        position: absolute;
-                        width: 120px;
-                        height: 120px;
-                        background: rgba(56, 189, 248, 0.18);
-                        border: 2px solid #38bdf8;
-                        color: #e2e8f0;
-                        font-family: 'Syne', sans-serif;
-                        font-size: 0.85rem;
-                        font-weight: bold;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        text-align: center;
-                        border-radius: 8px;
-                        box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
-                        backdrop-filter: blur(2px);
-                    }
-                    .front  { transform: translateZ(60px); }
-                    .back   { transform: rotateY(180deg) translateZ(60px); }
-                    .left   { transform: rotateY(-90deg) translateZ(60px); }
-                    .right  { transform: rotateY(90deg) translateZ(60px); }
-                    .top    { transform: rotateX(90deg) translateZ(60px); }
-                    .bottom { transform: rotateX(-90deg) translateZ(60px); }
-                    </style>
-
                     <div class="custom-loader-overlay">
                         <div class="cube-3d-container">
                             <div class="cube-3d">
@@ -693,7 +645,7 @@ CLUSTER_META = {
     "Menengah": {"label": "📊 Performa Stabil", "color": "#f59e0b", "bg": "rgba(245,158,11,0.08)", "border": "rgba(245,158,11,0.25)",
                  "saran": "Optimalkan konsistensi ujian komparatif dan submisi tugas agar menembus klaster utama."},
     "Berisiko": {"label": "⚠️ Perlu Bimbingan",    "color": "#ef4444", "bg": "rgba(239,68,68,0.08)", "border": "rgba(239,68,68,0.25)",
-                 "saran": "Perlu bimbingan intensif reguler bersama Penasihat Akademik (PA) sesegera mungkin."},
+                 "saran": "Perlu bimbingan intensif reguler bersama Penasihat Akademik (PA) sesegera Academic."},
     "Override_Berisiko": {"label": "🛑 Tidak Layak", "color": "#ef4444", "bg": "rgba(239,68,68,0.15)", "border": "#ef4444",
                  "saran": "OTOMATIS TIDAK MEMENUHI SYARAT KELAYAKAN UJIAN KAMPUS. Angka akumulasi parameter berada di zona batas kritis (0 - 3)."}
 }
@@ -874,7 +826,13 @@ if menu == "📊 Dashboard Analisis":
         st.warning("⚠️ Analisis Dashboard dikunci. Silakan sesuaikan Bobot Fitur di sidebar agar berjumlah pas 100%.")
         st.stop()
 
-    df_raw = load_and_preprocess(uploaded_file)
+    placeholder_load = st.empty()
+    with placeholder_load:
+        academic_loading_screen("Menjalankan Standardisasi Data & Pemetaan Klaster K-Means...", "PROSES SEGMENTASI PROFIL MAHASISWA")
+        df_raw = load_and_preprocess(uploaded_file)
+        time.sleep(2.0)
+    placeholder_load.empty()
+
     available = [f for f in ALL_FEATURES if f in df_raw.columns]
 
     st.markdown("<div class='section-title'>🎛️ Konfigurasi Sumbu Parameter</div>", unsafe_allow_html=True)
@@ -893,10 +851,15 @@ if menu == "📊 Dashboard Analisis":
 
     cluster_features = [x_axis, y_axis]
     
-    df_clustered, sil_score, _, _ = run_clustering_with_weights(
-        df_raw.to_json(), cluster_features, w_attendance, w_exams, w_quizzes, w_gpa,
-        is_override_enabled, override_feature, max_violation_limit
-    )
+    placeholder_axis = st.empty()
+    with placeholder_axis:
+        academic_loading_screen("Menghitung Jarak Euclidean & Memeriksa Aturan Batas Kritis Kampus...", "PROSES INFERENSI & KLASIFIKASI AI")
+        df_clustered, sil_score, _, _ = run_clustering_with_weights(
+            df_raw.to_json(), cluster_features, w_attendance, w_exams, w_quizzes, w_gpa,
+            is_override_enabled, override_feature, max_violation_limit
+        )
+        time.sleep(2.0)
+    placeholder_axis.empty()
 
     if 'df_clustered' in locals() or 'df_clustered' in globals():
 
@@ -1147,69 +1110,75 @@ elif menu == "🔍 Prediksi Individu":
     st.markdown("---")
     
     if st.button("🔍 Prediksi Kelompok", type="primary", use_container_width=True):
-        all_data = df_raw[available].fillna(df_raw[available].mean())
-        
-        f_att = w_attendance / 100.0
-        f_ex = w_exams / 100.0
-        f_qz = w_quizzes / 100.0
-        f_gp = w_gpa / 100.0
-        
-        scaled_all_df = pd.DataFrame(StandardScaler().fit_transform(all_data), columns=available)
-        for col in available:
-            if 'attended' in col or 'submitted' in col: scaled_all_df[col] *= f_att
-            elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_all_df[col] *= f_ex
-            elif 'quiz' in col: scaled_all_df[col] *= f_qz
-            elif 'gpa' in col: scaled_all_df[col] *= f_gp
+        placeholder_predict = st.empty()
+        with placeholder_predict:
+            academic_loading_screen("Menghitung Kedekatan Vektor & Memeriksa Syarat Kelayakan Akademik...", "PROSES KLASIFIKASI & DETEKSI DINI AI")
+            all_data = df_raw[available].fillna(df_raw[available].mean())
             
-        km = KMeans(n_clusters=3, random_state=42, n_init=10)
-        km.fit(scaled_all_df.values)
-
-        tmp = all_data.copy()
-        tmp['_cluster'] = km.labels_
-        rank = tmp.groupby('_cluster')[available].mean().sum(axis=1).sort_values(ascending=False)
-        rank_map = {rank.index[0]: "Tinggi", rank.index[1]: "Menengah", rank.index[2]: "Berisiko"}
-
-        input_df = pd.DataFrame([input_vals])
-        scaler_global = StandardScaler().fit(all_data)
-        scaled_input = scaler_global.transform(input_df)
-        scaled_input_df = pd.DataFrame(scaled_input, columns=available)
-        for col in available:
-            if 'attended' in col or 'submitted' in col: scaled_input_df[col] *= f_att
-            elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_input_df[col] *= f_ex
-            elif 'quiz' in col: scaled_input_df[col] *= f_qz
-            elif 'gpa' in col: scaled_input_df[col] *= f_gp
-
-        pred = km.predict(scaled_input_df.values)[0]
-        kategori = rank_map[pred]
-        
-        hit_blacklist_a = False
-        if is_override_enabled and (override_feature in input_vals):
-            if input_vals[override_feature] <= max_violation_limit:
-                hit_blacklist_a = True
-        
-        if hit_blacklist_a: kategori = "Override_Berisiko"
-        m = CLUSTER_META.get(kategori, CLUSTER_META["Berisiko"])
-        
-        if is_compare_mode:
-            input_df_b = pd.DataFrame([input_vals_b])
-            scaled_input_b = scaler_global.transform(input_df_b)
-            scaled_input_df_b = pd.DataFrame(scaled_input_b, columns=available)
+            f_att = w_attendance / 100.0
+            f_ex = w_exams / 100.0
+            f_qz = w_quizzes / 100.0
+            f_gp = w_gpa / 100.0
+            
+            scaled_all_df = pd.DataFrame(StandardScaler().fit_transform(all_data), columns=available)
             for col in available:
-                if 'attended' in col or 'submitted' in col: scaled_input_df_b[col] *= f_att
-                elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_input_df_b[col] *= f_ex
-                elif 'quiz' in col: scaled_input_df_b[col] *= f_qz
-                elif 'gpa' in col: scaled_input_df_b[col] *= f_gp
+                if 'attended' in col or 'submitted' in col: scaled_all_df[col] *= f_att
+                elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_all_df[col] *= f_ex
+                elif 'quiz' in col: scaled_all_df[col] *= f_qz
+                elif 'gpa' in col: scaled_all_df[col] *= f_gp
                 
-            pred_b = km.predict(scaled_input_df_b.values)[0]
-            kategori_b = rank_map[pred_b]
+            km = KMeans(n_clusters=3, random_state=42, n_init=10)
+            km.fit(scaled_all_df.values)
+
+            tmp = all_data.copy()
+            tmp['_cluster'] = km.labels_
+            rank = tmp.groupby('_cluster')[available].mean().sum(axis=1).sort_values(ascending=False)
+            rank_map = {rank.index[0]: "Tinggi", rank.index[1]: "Menengah", rank.index[2]: "Berisiko"}
+
+            input_df = pd.DataFrame([input_vals])
+            scaler_global = StandardScaler().fit(all_data)
+            scaled_input = scaler_global.transform(input_df)
+            scaled_input_df = pd.DataFrame(scaled_input, columns=available)
+            for col in available:
+                if 'attended' in col or 'submitted' in col: scaled_input_df[col] *= f_att
+                elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_input_df[col] *= f_ex
+                elif 'quiz' in col: scaled_input_df[col] *= f_qz
+                elif 'gpa' in col: scaled_input_df[col] *= f_gp
+
+            pred = km.predict(scaled_input_df.values)[0]
+            kategori = rank_map[pred]
             
-            hit_blacklist_b = False
-            if is_override_enabled and (override_feature in input_vals_b):
-                if input_vals_b[override_feature] <= max_violation_limit:
-                    hit_blacklist_b = True
+            hit_blacklist_a = False
+            if is_override_enabled and (override_feature in input_vals):
+                if input_vals[override_feature] <= max_violation_limit:
+                    hit_blacklist_a = True
             
-            if hit_blacklist_b: kategori_b = "Override_Berisiko"
-            m_b = CLUSTER_META.get(kategori_b, CLUSTER_META["Berisiko"])
+            if hit_blacklist_a: kategori = "Override_Berisiko"
+            m = CLUSTER_META.get(kategori, CLUSTER_META["Berisiko"])
+            
+            if is_compare_mode:
+                input_df_b = pd.DataFrame([input_vals_b])
+                scaled_input_b = scaler_global.transform(input_df_b)
+                scaled_input_df_b = pd.DataFrame(scaled_input_b, columns=available)
+                for col in available:
+                    if 'attended' in col or 'submitted' in col: scaled_input_df_b[col] *= f_att
+                    elif 'marks' in col and ('midterm' in col or 'final' in col): scaled_input_df_b[col] *= f_ex
+                    elif 'quiz' in col: scaled_input_df_b[col] *= f_qz
+                    elif 'gpa' in col: scaled_input_df_b[col] *= f_gp
+                    
+                pred_b = km.predict(scaled_input_df_b.values)[0]
+                kategori_b = rank_map[pred_b]
+                
+                hit_blacklist_b = False
+                if is_override_enabled and (override_feature in input_vals_b):
+                    if input_vals_b[override_feature] <= max_violation_limit:
+                        hit_blacklist_b = True
+                
+                if hit_blacklist_b: kategori_b = "Override_Berisiko"
+                m_b = CLUSTER_META.get(kategori_b, CLUSTER_META["Berisiko"])
+
+            time.sleep(2.0)
+        placeholder_predict.empty()
 
         # ─────────────────────────────────────────────
         # SUB-FUNGSI: SMART IMPROVEMENT ADVICE
