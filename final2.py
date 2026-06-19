@@ -16,6 +16,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
 import warnings
 import time
+import io
 warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────
@@ -572,6 +573,79 @@ if not st.session_state.started:
         c1, c2, c3 = st.columns([2, 1.2, 2])
         with c2:
             if st.button("Mulai Analisis 🚀", use_container_width=True):
+                welcome_container.markdown("""
+                    <style>
+                    @keyframes spin3D {
+                        0% { transform: rotateY(0deg) rotateX(0deg); }
+                        100% { transform: rotateY(360deg) rotateX(360deg); }
+                    }
+                    @keyframes fadeInOverlay {
+                        from { opacity: 0; backdrop-filter: blur(0px); }
+                        to { opacity: 1; backdrop-filter: blur(4px); }
+                    }
+                    .custom-loader-overlay {
+                        animation: fadeInOverlay 0.4s ease forwards;
+                    }
+                    .cube-3d-container {
+                        perspective: 1000px;
+                        width: 150px;
+                        height: 150px;
+                        margin: 40px auto;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }
+                    .cube-3d {
+                        width: 120px;
+                        height: 120px;
+                        position: relative;
+                        transform-style: preserve-3d;
+                        animation: spin3D 6s infinite linear;
+                    }
+                    .cube-face {
+                        position: absolute;
+                        width: 120px;
+                        height: 120px;
+                        background: rgba(56, 189, 248, 0.18);
+                        border: 2px solid #38bdf8;
+                        color: #e2e8f0;
+                        font-family: 'Syne', sans-serif;
+                        font-size: 0.85rem;
+                        font-weight: bold;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        text-align: center;
+                        border-radius: 8px;
+                        box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+                        backdrop-filter: blur(2px);
+                    }
+                    .front  { transform: translateZ(60px); }
+                    .back   { transform: rotateY(180deg) translateZ(60px); }
+                    .left   { transform: rotateY(-90deg) translateZ(60px); }
+                    .right  { transform: rotateY(90deg) translateZ(60px); }
+                    .top    { transform: rotateX(90deg) translateZ(60px); }
+                    .bottom { transform: rotateX(-90deg) translateZ(60px); }
+                    </style>
+
+                    <div class="custom-loader-overlay">
+                        <div class="cube-3d-container">
+                            <div class="cube-3d">
+                                <div class="cube-face front"><span>📝</span><br>KUIS</div>
+                                <div class="cube-face back"><span>📊</span><br>UJIAN</div>
+                                <div class="cube-face left"><span>📅</span><br>ABSEN</div>
+                                <div class="cube-face right"><span>📂</span><br>TUGAS</div>
+                                <div class="cube-face top"><span>📈</span><br>IPK</div>
+                                <div class="cube-face bottom"><span>🤖</span><br>AI ENGINE</div>
+                            </div>
+                        </div>
+                        <div class="loader-text" style="margin-top:40px;">Memuat Modul Komponen AI & Struktur Interface...</div>
+                        <div class="loader-subtext">🧬 LOADING INTERFACE MODULES</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                time.sleep(5) 
                 welcome_container.empty()
                 st.session_state.started = True
                 st.rerun()
@@ -737,7 +811,7 @@ def load_and_preprocess(file_obj):
     return df
 
 def run_clustering_with_weights(df_json, features, w_att, w_ex, w_qz, w_gp, override_active, ov_feat, ov_limit):
-    df = pd.read_json(df_json)
+    df = pd.read_json(io.StringIO(df_json))
     data = df[list(features)].fillna(df[list(features)].mean())
     
     scaler = StandardScaler()
@@ -1130,7 +1204,7 @@ elif menu == "🔍 Prediksi Individu":
             kategori_b = rank_map[pred_b]
             
             hit_blacklist_b = False
-            if is_override_enabled and (override_feature in input_vals_b):
+            if is_override_enabled && (override_feature in input_vals_b):
                 if input_vals_b[override_feature] <= max_violation_limit:
                     hit_blacklist_b = True
             
