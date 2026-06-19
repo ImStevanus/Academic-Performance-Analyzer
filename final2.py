@@ -873,43 +873,6 @@ if menu == "📊 Dashboard Analisis":
         st.warning("⚠️ Analisis Dashboard dikunci. Silakan sesuaikan Bobot Fitur di sidebar agar berjumlah pas 100%.")
         st.stop()
 
-    # ANIMASI 1: Loading berkas data set baru (3 Detik)
-    placeholder_load = st.empty()
-    with placeholder_load:
-        academic_loading_screen("Menjalankan Standardisasi Data & Pemetaan Klaster K-Means...", "PROSES SEGMENTASI PROFIL MAHASISWA")
-        df_raw = load_and_preprocess(uploaded_file)
-        time.sleep(1.0)
-    placeholder_load.empty()
-
-    available = [f for f in ALL_FEATURES if f in df_raw.columns]
-
-    st.markdown("<div class='section-title'>🎛️ Konfigurasi Sumbu Parameter</div>", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        default_x_idx = available.index('lectures_attended') if 'lectures_attended' in available else 0
-        x_axis = st.selectbox("Parameter Sumbu X :", options=available, index=default_x_idx, format_func=fmt, key="x")
-    with c2:
-        y_axis = st.selectbox("Parameter Sumbu Y :", options=available,
-            index=available.index('final_marks') if 'final_marks' in available else 1,
-            format_func=fmt, key="y")
-
-    if x_axis == y_axis:
-        st.error("⚠️ Parameter Sumbu X dan Y tidak boleh sama. Pilih parameter yang berbeda.")
-        st.stop()
-
-    cluster_features = [x_axis, y_axis]
-    
-    # ANIMASI 2
-    placeholder_axis = st.empty()
-    with placeholder_axis:
-        academic_loading_screen("Menghitung Jarak Euclidean & Memeriksa Aturan Batas Kritis Kampus...", "PROSES INFERENSI & KLASIFIKASI AI")
-        df_clustered, sil_score, _, _ = run_clustering_with_weights(
-            df_raw.to_json(), cluster_features, w_attendance, w_exams, w_quizzes, w_gpa,
-            is_override_enabled, override_feature, max_violation_limit
-        )
-        time.sleep(1.0)
-    placeholder_axis.empty()
-
 # Metric cards 
     st.markdown("---")
     total = len(df_clustered)
