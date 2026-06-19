@@ -873,169 +873,207 @@ if menu == "📊 Dashboard Analisis":
         st.warning("⚠️ Analisis Dashboard dikunci. Silakan sesuaikan Bobot Fitur di sidebar agar berjumlah pas 100%.")
         st.stop()
 
-# Metric cards 
-    st.markdown("---")
-    total = len(df_clustered)
-    counts = df_clustered['Kategori'].value_counts()
-    accent_color = st.get_option("theme.primaryColor") or "#38bdf8"
+    # ANIMASI 1: Loading berkas data set baru (3 Detik)
+    placeholder_load = st.empty()
+    with placeholder_load:
+        academic_loading_screen("Menjalankan Standardisasi Data & Pemetaan Klaster K-Means...", "PROSES SEGMENTASI PROFIL MAHASISWA")
+        df_raw = load_and_preprocess(uploaded_file)
+        time.sleep(1.0)
+    placeholder_load.empty()
 
-    has_override = "Override_Berisiko" in counts and counts["Override_Berisiko"] > 0
+    available = [f for f in ALL_FEATURES if f in df_raw.columns]
 
-    if has_override:
-        mc1, mc2, mc3, mc4, mc5 = st.columns(5)
-        with mc1:
-            st.markdown(metric_card_html("Total Mahasiswa", total, f"file: {uploaded_file.name}", accent_color), unsafe_allow_html=True)
-        with mc2:
-            st.markdown(cluster_card_html("Tinggi", counts.get("Tinggi", 0), counts.get("Tinggi", 0)/total*100), unsafe_allow_html=True)
-        with mc3:
-            st.markdown(cluster_card_html("Menengah", counts.get("Menengah", 0), counts.get("Menengah", 0)/total*100), unsafe_allow_html=True)
-        with mc4:
-            st.markdown(cluster_card_html("Berisiko", counts.get("Berisiko", 0), counts.get("Berisiko", 0)/total*100), unsafe_allow_html=True)
-        with mc5:
-            st.markdown(cluster_card_html("Override_Berisiko", counts.get("Override_Berisiko", 0), counts.get("Override_Berisiko", 0)/total*100), unsafe_allow_html=True)
-    else:
-        mc1, mc2, mc3, mc4 = st.columns(4)
-        with mc1:
-            st.markdown(metric_card_html("Total Mahasiswa", total, f"file: {uploaded_file.name}", accent_color), unsafe_allow_html=True)
-        with mc2:
-            st.markdown(cluster_card_html("Tinggi", counts.get("Tinggi", 0), counts.get("Tinggi", 0)/total*100), unsafe_allow_html=True)
-        with mc3:
-            st.markdown(cluster_card_html("Menengah", counts.get("Menengah", 0), counts.get("Menengah", 0)/total*100), unsafe_allow_html=True)
-        with mc4:
-            st.markdown(cluster_card_html("Berisiko", counts.get("Berisiko", 0), counts.get("Berisiko", 0)/total*100), unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>🎛️ Konfigurasi Sumbu Parameter</div>", unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        default_x_idx = available.index('lectures_attended') if 'lectures_attended' in available else 0
+        x_axis = st.selectbox("Parameter Sumbu X :", options=available, index=default_x_idx, format_func=fmt, key="x")
+    with c2:
+        y_axis = st.selectbox("Parameter Sumbu Y :", options=available,
+            index=available.index('final_marks') if 'final_marks' in available else 1,
+            format_func=fmt, key="y")
 
-    if counts.get("Override_Berisiko", 0) > 0:
-        st.error(f"🛑 **Sistem Mendeteksi:** Sebanyak **{counts.get('Override_Berisiko')} Mahasiswa** otomatis masuk status Tidak Layak karena angka berada di bawah (0 - {int(max_violation_limit)})!")
+    if x_axis == y_axis:
+        st.error("⚠️ Parameter Sumbu X dan Y tidak boleh sama. Pilih parameter yang berbeda.")
+        st.stop()
 
-    # Charts & Tab Layout 
-    st.markdown("---")
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📍 Visualisasi Data", 
-        "🥧 Proporsi & Karakteristik", 
-        "📊 Detail Deskriptif Nilai", 
-        "📈 Pengujian Cluster",
-        "🧠 Signifikansi Fitur (XAI)"
-    ])
-
-    df_clustered['Label'] = df_clustered['Kategori'].apply(lambda x: CLUSTER_META.get(x, CLUSTER_META["Berisiko"])['label'])
-    color_map = {CLUSTER_META[k]['label']: CLUSTER_META[k]['color'] for k in CLUSTER_META}
+    cluster_features = [x_axis, y_axis]
     
-    is_light = st.get_option("theme.base") == "light" or st.get_option("theme.backgroundColor") == "#ffffff"
-    dot_border = "#ffffff" if is_light else "#0d1117"
-    PT = get_plotly_theme()
+    # ANIMASI 2
+    placeholder_axis = st.empty()
+    with placeholder_axis:
+        academic_loading_screen("Menghitung Jarak Euclidean & Memeriksa Aturan Batas Kritis Kampus...", "PROSES INFERENSI & KLASIFIKASI AI")
+        df_clustered, sil_score, _, _ = run_clustering_with_weights(
+            df_raw.to_json(), cluster_features, w_attendance, w_exams, w_quizzes, w_gpa,
+            is_override_enabled, override_feature, max_violation_limit
+        )
+        time.sleep(1.0)
+    placeholder_axis.empty()
 
-    with tab1:
-        fig = px.scatter(df_clustered, x=x_axis, y=y_axis, color="Label",
-            color_discrete_map=color_map,
-            hover_data=["name"] if "name" in df_clustered.columns else None,
-            labels={x_axis: fmt(x_axis), y_axis: fmt(y_axis)},
-            title=f"Sebaran Mahasiswa: {fmt(x_axis)} vs {fmt(y_axis)}",
-            template="none", opacity=0.85)
-        fig.update_traces(marker=dict(size=8, line=dict(width=0.6, color=dot_border)))
-        fig.update_layout(**PT, height=430,
-            legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0))
-        st.plotly_chart(fig, use_container_width=True, key=f"scatter_{x_axis}_{y_axis}")
+    if 'df_clustered' in locals() or 'df_clustered' in globals():
 
+        # Metric cards 
         st.markdown("---")
-        st.markdown("<div class='section-title'>🗂️ Tabel Data Mahasiswa & Hasil Cluster</div>", unsafe_allow_html=True)
-        show_cols = (['name'] if 'name' in df_clustered.columns else []) + ['Kategori', 'Label'] + available
-        show_cols = [c for c in show_cols if c in df_clustered.columns]
-        
-        # ── MAP FILTER UNTUK MENYESUAIKAN LABEL DISPLAY DAN KATEGORI INTERNAL DATA ──
-        filter_options = {
-            "Semua": "Semua",
-            "Tinggi": "Tinggi",
-            "Stabil": "Menengah",
-            "Perlu Bimbingan": "Berisiko",
-            "Tidak Layak": "Override_Berisiko"
-        }
-        
-        filter_cat = st.selectbox("Filter Kelompok", list(filter_options.keys()), key="filter_table")
-        internal_cat = filter_options[filter_cat]
-        
-        tbl = df_clustered[show_cols] if filter_cat == "Semua" else df_clustered[df_clustered['Kategori'] == internal_cat][show_cols]
-        st.dataframe(tbl.reset_index(drop=True), use_container_width=True, height=300)
+        total = len(df_clustered)
+        counts = df_clustered['Kategori'].value_counts()
+        accent_color = st.get_option("theme.primaryColor") or "#38bdf8"
 
-    with tab2:
-        col_pie, col_bar = st.columns(2)
-        with col_pie:
-            pie_df = df_clustered['Label'].value_counts().reset_index()
-            pie_df.columns = ['Kelompok', 'Jumlah']
-            fig_pie = px.pie(pie_df, names="Kelompok", values="Jumlah",
-                color="Kelompok", color_discrete_map=color_map, hole=0.52, template="none")
-            fig_pie.update_traces(textfont_size=13, marker=dict(line=dict(color=dot_border, width=2)))
-            fig_pie.update_layout(**PT, height=360,
-                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
-            st.plotly_chart(fig_pie, use_container_width=True, key=f"pie_{x_axis}_{y_axis}")
+        has_override = "Override_Berisiko" in counts and counts["Override_Berisiko"] > 0
 
-        with col_bar:
-            bar_df = df_clustered.groupby('Label')[available].mean().reset_index()
-            bar_melt = bar_df.melt(id_vars='Label', var_name='Fitur', value_name='Rata-rata')
-            bar_melt['Fitur'] = bar_melt['Fitur'].apply(fmt)
-            
-            fig_bar = px.bar(bar_melt, x='Fitur', y='Rata-rata', color='Label',
-                barmode='group', template="none", color_discrete_map=color_map,
-                title="Rata-rata Fitur per Kelompok (Up to Date)")
-            fig_bar.update_layout(**PT, height=360, xaxis_tickangle=-35,
+        if has_override:
+            mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+            with mc1:
+                st.markdown(metric_card_html("Total Mahasiswa", total, f"file: {uploaded_file.name}", accent_color), unsafe_allow_html=True)
+            with mc2:
+                st.markdown(cluster_card_html("Tinggi", counts.get("Tinggi", 0), counts.get("Tinggi", 0)/total*100), unsafe_allow_html=True)
+            with mc3:
+                st.markdown(cluster_card_html("Menengah", counts.get("Menengah", 0), counts.get("Menengah", 0)/total*100), unsafe_allow_html=True)
+            with mc4:
+                st.markdown(cluster_card_html("Berisiko", counts.get("Berisiko", 0), counts.get("Berisiko", 0)/total*100), unsafe_allow_html=True)
+            with mc5:
+                st.markdown(cluster_card_html("Override_Berisiko", counts.get("Override_Berisiko", 0), counts.get("Override_Berisiko", 0)/total*100), unsafe_allow_html=True)
+        else:
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            with mc1:
+                st.markdown(metric_card_html("Total Mahasiswa", total, f"file: {uploaded_file.name}", accent_color), unsafe_allow_html=True)
+            with mc2:
+                st.markdown(cluster_card_html("Tinggi", counts.get("Tinggi", 0), counts.get("Tinggi", 0)/total*100), unsafe_allow_html=True)
+            with mc3:
+                st.markdown(cluster_card_html("Menengah", counts.get("Menengah", 0), counts.get("Menengah", 0)/total*100), unsafe_allow_html=True)
+            with mc4:
+                st.markdown(cluster_card_html("Berisiko", counts.get("Berisiko", 0), counts.get("Berisiko", 0)/total*100), unsafe_allow_html=True)
+
+        if counts.get("Override_Berisiko", 0) > 0:
+            st.error(f"🛑 **Sistem Mendeteksi:** Sebanyak **{counts.get('Override_Berisiko')} Mahasiswa** otomatis masuk status Tidak Layak karena angka berada di bawah (0 - {int(max_violation_limit)})!")
+
+        # Charts & Tab Layout 
+        st.markdown("---")
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📍 Visualisasi Data", 
+            "🥧 Proporsi & Karakteristik", 
+            "📊 Detail Deskriptif Nilai", 
+            "📈 Pengujian Cluster",
+            "🧠 Signifikansi Fitur (XAI)"
+        ])
+
+        df_clustered['Label'] = df_clustered['Kategori'].apply(lambda x: CLUSTER_META.get(x, CLUSTER_META["Berisiko"])['label'])
+        color_map = {CLUSTER_META[k]['label']: CLUSTER_META[k]['color'] for k in CLUSTER_META}
+        
+        is_light = st.get_option("theme.base") == "light" or st.get_option("theme.backgroundColor") == "#ffffff"
+        dot_border = "#ffffff" if is_light else "#0d1117"
+        PT = get_plotly_theme()
+
+        with tab1:
+            fig = px.scatter(df_clustered, x=x_axis, y=y_axis, color="Label",
+                color_discrete_map=color_map,
+                hover_data=["name"] if "name" in df_clustered.columns else None,
+                labels={x_axis: fmt(x_axis), y_axis: fmt(y_axis)},
+                title=f"Sebaran Mahasiswa: {fmt(x_axis)} vs {fmt(y_axis)}",
+                template="none", opacity=0.85)
+            fig.update_traces(marker=dict(size=8, line=dict(width=0.6, color=dot_border)))
+            fig.update_layout(**PT, height=430,
                 legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0))
-            st.plotly_chart(fig_bar, use_container_width=True, key=f"bar_{x_axis}_{y_axis}")
+            st.plotly_chart(fig, use_container_width=True, key=f"scatter_{x_axis}_{y_axis}")
 
-    with tab3:
-        stat_df = df_clustered.groupby('Kategori')[available].agg(['mean','min','max']).round(2)
-        stat_df.columns = [f"{col[1].upper()} {fmt(col[0])}" for col in stat_df.columns]
-        st.dataframe(stat_df, use_container_width=True)
-
-    with tab4:
-        st.markdown("<div class='section-title'>📉 Penentuan Centroid via Elbow & Silhouette Score</div>", unsafe_allow_html=True)
-        data_ev = df_raw[available].fillna(df_raw[available].mean())
-        scaled_ev = StandardScaler().fit_transform(data_ev)
-        
-        inertias = []
-        silhouettes = []
-        k_list = list(range(2, 8))
-        for k_val in k_list:
-            km_test = KMeans(n_clusters=k_val, random_state=42, n_init=5).fit(scaled_ev)
-            inertias.append(km_test.inertia_)
-            silhouettes.append(silhouette_score(scaled_ev, km_test.labels_))
+            st.markdown("---")
+            st.markdown("<div class='section-title'>🗂️ Tabel Data Mahasiswa & Hasil Cluster</div>", unsafe_allow_html=True)
+            show_cols = (['name'] if 'name' in df_clustered.columns else []) + ['Kategori', 'Label'] + available
+            show_cols = [c for c in show_cols if c in df_clustered.columns]
             
-        c_el1, c_el2 = st.columns(2)
-        with c_el1:
-            fig_el = go.Figure(data=go.Scatter(x=k_list, y=inertias, mode='lines+markers', line=dict(color=accent_color, width=3)))
-            fig_el.add_vline(x=3, line_dash="dash", line_color="#ef4444", annotation_text="K Pilihan = 3")
-            fig_el.update_layout(**PT, title="Grafik Elbow", height=320, xaxis_title="Jumlah Cluster (k)", yaxis_title="Inertia / WCSS")
-            st.plotly_chart(fig_el, use_container_width=True)
-        with c_el2:
-            fig_sil = go.Figure(data=go.Scatter(x=k_list, y=silhouettes, mode='lines+markers', line=dict(color="#10b981", width=3)))
-            fig_sil.add_vline(x=3, line_dash="dash", line_color="#ef4444", annotation_text="K Tertinggi = 3")
-            fig_sil.update_layout(**PT, title="Grafik Silhouette Score", height=320, xaxis_title="Jumlah Cluster (k)", yaxis_title="Silhouette Score")
-            st.plotly_chart(fig_sil, use_container_width=True)
+            filter_options = {
+                "Semua": "Semua",
+                "Tinggi": "Tinggi",
+                "Stabil": "Menengah",
+                "Perlu Bimbingan": "Berisiko",
+                "Tidak Layak": "Override_Berisiko"
+            }
+            
+            filter_cat = st.selectbox("Filter Kelompok", list(filter_options.keys()), key="filter_table")
+            internal_cat = filter_options[filter_cat]
+            
+            tbl = df_clustered[show_cols] if filter_cat == "Semua" else df_clustered[df_clustered['Kategori'] == internal_cat][show_cols]
+            st.dataframe(tbl.reset_index(drop=True), use_container_width=True, height=300)
 
-    with tab5:
-        st.markdown("<div class='section-title'>🧠 Explainable AI (XAI): Fitur Paling Berpengaruh secara Global</div>", unsafe_allow_html=True)
-        data_xai = df_raw[available].fillna(df_raw[available].mean())
-        scaled_xai = StandardScaler().fit_transform(data_xai)
-        
-        km_xai = KMeans(n_clusters=3, random_state=42, n_init=10)
-        labels_xai = km_xai.fit_predict(scaled_xai)
-        
-        rf_proxy = RandomForestClassifier(n_estimators=50, random_state=42)
-        rf_proxy.fit(scaled_xai, labels_xai)
-        result_xai = permutation_importance(rf_proxy, scaled_xai, labels_xai, n_repeats=5, random_state=42)
-        
-        importance_df = pd.DataFrame({
-            'Fitur': [fmt(f) for f in available],
-            'Bobot Pengaruh': result_xai.importances_mean
-        }).sort_values(ascending=True, by='Bobot Pengaruh')
-        
-        fig_xai = px.bar(importance_df, x='Bobot Pengaruh', y='Fitur', orientation='h', template='none')
-        
-        is_dark_global = st.get_option("theme.base") == "dark" or st.get_option("theme.backgroundColor") != "#ffffff"
-        colorscale_fixed = "RdBu_r" if not is_dark_global else [[0,"#1a5fa8"],[0.5,"#21262d"],[1,"#a83220"]]
-        
-        fig_xai.update_traces(marker_color='#38bdf8', marker_line_color=dot_border, marker_line_width=0.5)
-        fig_xai.update_layout(**PT, height=400, title="Tingkat Sensitivitas Matriks terhadap Penentuan Klaster Global",
-                              xaxis_title="Skor Signifikansi Vektor", yaxis_title="")
-        st.plotly_chart(fig_xai, use_container_width=True)
+        with tab2:
+            col_pie, col_bar = st.columns(2)
+            with col_pie:
+                pie_df = df_clustered['Label'].value_counts().reset_index()
+                pie_df.columns = ['Kelompok', 'Jumlah']
+                fig_pie = px.pie(pie_df, names="Kelompok", values="Jumlah",
+                    color="Kelompok", color_discrete_map=color_map, hole=0.52, template="none")
+                fig_pie.update_traces(textfont_size=13, marker=dict(line=dict(color=dot_border, width=2)))
+                fig_pie.update_layout(**PT, height=360,
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
+                st.plotly_chart(fig_pie, use_container_width=True, key=f"pie_{x_axis}_{y_axis}")
+
+            with col_bar:
+                bar_df = df_clustered.groupby('Label')[available].mean().reset_index()
+                bar_melt = bar_df.melt(id_vars='Label', var_name='Fitur', value_name='Rata-rata')
+                bar_melt['Fitur'] = bar_melt['Fitur'].apply(fmt)
+                
+                fig_bar = px.bar(bar_melt, x='Fitur', y='Rata-rata', color='Label',
+                    barmode='group', template="none", color_discrete_map=color_map,
+                    title="Rata-rata Fitur per Kelompok (Up to Date)")
+                fig_bar.update_layout(**PT, height=360, xaxis_tickangle=-35,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0))
+                st.plotly_chart(fig_bar, use_container_width=True, key=f"bar_{x_axis}_{y_axis}")
+
+        with tab3:
+            stat_df = df_clustered.groupby('Kategori')[available].agg(['mean','min','max']).round(2)
+            stat_df.columns = [f"{col[1].upper()} {fmt(col[0])}" for col in stat_df.columns]
+            st.dataframe(stat_df, use_container_width=True)
+
+        with tab4:
+            st.markdown("<div class='section-title'>📉 Penentuan Centroid via Elbow & Silhouette Score</div>", unsafe_allow_html=True)
+            data_ev = df_raw[available].fillna(df_raw[available].mean())
+            scaled_ev = StandardScaler().fit_transform(data_ev)
+            
+            inertias = []
+            silhouettes = []
+            k_list = list(range(2, 8))
+            for k_val in k_list:
+                km_test = KMeans(n_clusters=k_val, random_state=42, n_init=5).fit(scaled_ev)
+                inertias.append(km_test.inertia_)
+                silhouettes.append(silhouette_score(scaled_ev, km_test.labels_))
+                
+            c_el1, c_el2 = st.columns(2)
+            with c_el1:
+                fig_el = go.Figure(data=go.Scatter(x=k_list, y=inertias, mode='lines+markers', line=dict(color=accent_color, width=3)))
+                fig_el.add_vline(x=3, line_dash="dash", line_color="#ef4444", annotation_text="K Pilihan = 3")
+                fig_el.update_layout(**PT, title="Grafik Elbow", height=320, xaxis_title="Jumlah Cluster (k)", yaxis_title="Inertia / WCSS")
+                st.plotly_chart(fig_el, use_container_width=True)
+            with c_el2:
+                fig_sil = go.Figure(data=go.Scatter(x=k_list, y=silhouettes, mode='lines+markers', line=dict(color="#10b981", width=3)))
+                fig_sil.add_vline(x=3, line_dash="dash", line_color="#ef4444", annotation_text="K Tertinggi = 3")
+                fig_sil.update_layout(**PT, title="Grafik Silhouette Score", height=320, xaxis_title="Jumlah Cluster (k)", yaxis_title="Silhouette Score")
+                st.plotly_chart(fig_sil, use_container_width=True)
+
+        with tab5:
+            st.markdown("<div class='section-title'>🧠 Explainable AI (XAI): Fitur Paling Berpengaruh secara Global</div>", unsafe_allow_html=True)
+            data_xai = df_raw[available].fillna(df_raw[available].mean())
+            scaled_xai = StandardScaler().fit_transform(data_xai)
+            
+            km_xai = KMeans(n_clusters=3, random_state=42, n_init=10)
+            labels_xai = km_xai.fit_predict(scaled_xai)
+            
+            rf_proxy = RandomForestClassifier(n_estimators=50, random_state=42)
+            rf_proxy.fit(scaled_xai, labels_xai)
+            result_xai = permutation_importance(rf_proxy, scaled_xai, labels_xai, n_repeats=5, random_state=42)
+            
+            importance_df = pd.DataFrame({
+                'Fitur': [fmt(f) for f in available],
+                'Bobot Pengaruh': result_xai.importances_mean
+            }).sort_values(ascending=True, by='Bobot Pengaruh')
+            
+            fig_xai = px.bar(importance_df, x='Bobot Pengaruh', y='Fitur', orientation='h', template='none')
+            
+            is_dark_global = st.get_option("theme.base") == "dark" or st.get_option("theme.backgroundColor") != "#ffffff"
+            colorscale_fixed = "RdBu_r" if not is_dark_global else [[0,"#1a5fa8"],[0.5,"#21262d"],[1,"#a83220"]]
+            
+            fig_xai.update_traces(marker_color='#38bdf8', marker_line_color=dot_border, marker_line_width=0.5)
+            fig_xai.update_layout(**PT, height=400, title="Tingkat Sensitivitas Matriks terhadap Penentuan Klaster Global",
+                                  xaxis_title="Skor Signifikansi Vektor", yaxis_title="")
+            st.plotly_chart(fig_xai, use_container_width=True)
 
 
 # ─────────────────────────────────────────────
