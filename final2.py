@@ -1204,7 +1204,7 @@ elif menu == "🔍 Prediksi Individu":
             kategori_b = rank_map[pred_b]
             
             hit_blacklist_b = False
-            if is_override_enabled && (override_feature in input_vals_b):
+            if is_override_enabled and (override_feature in input_vals_b):
                 if input_vals_b[override_feature] <= max_violation_limit:
                     hit_blacklist_b = True
             
