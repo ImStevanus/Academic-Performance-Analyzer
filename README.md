@@ -36,3 +36,11 @@ Dataset yang digunakan berasal dari Kaggle (*student_dropout_behavior_dataset.cs
 * **Matriks Kehadiran & Tugas:** `lectures_attended`, `labs_attended`, `assignments_submitted`.
 
 ---
+
+## 🔗 Link 
+**Google Colab:**
+https://colab.research.google.com/drive/1j5aktpADBrJCXbu3ut9LGxQhpV325xHZ?usp=sharing
+
+**Streamlit (Online):**
+https://academic-performance-analyzers.streamlit.app/
+
