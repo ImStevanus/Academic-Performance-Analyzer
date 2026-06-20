@@ -16,6 +16,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
 import warnings
 import time
+import io
 warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────
@@ -32,7 +33,7 @@ if 'started' not in st.session_state:
     st.session_state.started = False
 
 # ─────────────────────────────────────────────
-# 2. GLOBAL CSS — CLEAN ADAPTIVE THEME & KUSTOM FULLSCREEN LOADING
+# 2. GLOBAL CSS 
 # ─────────────────────────────────────────────
 st.markdown("""
     <style>
@@ -422,7 +423,7 @@ st.markdown("""
     }
 
     /* ────────────────────────────────────────────────────────
-       🔥 KUSTOM BLUR & FULLSCREEN LOADING (Layar Meredup + Icon Muter)
+       BLUR & FULLSCREEN LOADING KUBUS 3D 
        ──────────────────────────────────────────────────────── */
     .custom-loader-overlay {
         position: fixed;
@@ -436,43 +437,58 @@ st.markdown("""
         align-items: center;
     }
 
-    .loader-container {
-        position: relative;
-        width: 120px;
-        height: 120px;
+    @keyframes spin3D {
+        0% { transform: rotateY(0deg) rotateX(0deg); }
+        100% { transform: rotateY(360deg) rotateX(360deg); }
+    }
+    @keyframes fadeInOverlay {
+        from { opacity: 0; backdrop-filter: blur(0px); }
+        to { opacity: 1; backdrop-filter: blur(4px); }
+    }
+    .custom-loader-overlay {
+        animation: fadeInOverlay 0.4s ease forwards;
+    }
+    .cube-3d-container {
+        perspective: 1000px;
+        width: 150px;
+        height: 150px;
+        margin: 40px auto;
         display: flex;
         justify-content: center;
         align-items: center;
     }
-
-    .academic-spinner {
+    .cube-3d {
+        width: 120px;
+        height: 120px;
+        position: relative;
+        transform-style: preserve-3d;
+        animation: spin3D 6s infinite linear;
+    }
+    .cube-face {
         position: absolute;
-        width: 100px;
-        height: 100px;
-        border: 4px solid transparent;
-        border-top: 4px solid var(--accent);
-        border-bottom: 4px solid var(--accent);
-        border-radius: 50%;
-        animation: spin-clockwise 1.2s linear infinite;
+        width: 120px;
+        height: 120px;
+        background: rgba(56, 189, 248, 0.18);
+        border: 2px solid #38bdf8;
+        color: #e2e8f0;
+        font-family: 'Syne', sans-serif;
+        font-size: 0.85rem;
+        font-weight: bold;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        border-radius: 8px;
+        box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+        backdrop-filter: blur(2px);
     }
-
-    .academic-spinner-outer {
-        position: absolute;
-        width: 124px;
-        height: 124px;
-        border: 2px solid transparent;
-        border-left: 2px solid var(--text-muted);
-        border-right: 2px solid var(--text-muted);
-        border-radius: 50%;
-        animation: spin-counter-clockwise 3s linear infinite;
-    }
-
-    .academic-icon-center {
-        font-size: 2.5rem;
-        animation: pulse-icon 1.5s ease-in-out infinite;
-        z-index: 10;
-        user-select: none;
-    }
+    .front  { transform: translateZ(60px); }
+    .back   { transform: rotateY(180deg) translateZ(60px); }
+    .left   { transform: rotateY(-90deg) translateZ(60px); }
+    .right  { transform: rotateY(90deg) translateZ(60px); }
+    .top    { transform: rotateX(90deg) translateZ(60px); }
+    .bottom { transform: rotateX(-90deg) translateZ(60px); }
 
     .loader-text {
         font-family: 'Syne', sans-serif;
@@ -494,19 +510,6 @@ st.markdown("""
         letter-spacing: 0.08em;
     }
 
-    @keyframes spin-clockwise {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    @keyframes spin-counter-clockwise {
-        0% { transform: rotate(360deg); }
-        100% { transform: rotate(0deg); }
-    }
-    @keyframes pulse-icon {
-        0%, 100% { transform: scale(1); opacity: 0.9; }
-        50% { transform: scale(1.15); opacity: 1; filter: drop-shadow(0 0 12px var(--accent)); }
-    }
-
     </style>
     """, unsafe_allow_html=True)
 
@@ -517,79 +520,107 @@ st.markdown("""
 def academic_loading_screen(status_text, sub_text="PROCESSING CORE ENGINE"):
     return st.markdown(f"""
         <div class="custom-loader-overlay">
-            <div class="loader-container">
-                <div class="academic-spinner-outer"></div>
-                <div class="academic-spinner"></div>
-                <div class="academic-icon-center">🎓</div>
+            <div class="cube-3d-container">
+                <div class="cube-3d">
+                    <div class="cube-face front"><span>📝</span><br>KUIS</div>
+                    <div class="cube-face back"><span>📊</span><br>UJIAN</div>
+                    <div class="cube-face left"><span>📅</span><br>ABSEN</div>
+                    <div class="cube-face right"><span>📂</span><br>TUGAS</div>
+                    <div class="cube-face top"><span>📈</span><br>IPK</div>
+                    <div class="cube-face bottom"><span>🤖</span><br>AI ENGINE</div>
+                </div>
             </div>
-            <div class="loader-text">{status_text}</div>
+            <div class="loader-text" style="margin-top:40px;">{status_text}</div>
             <div class="loader-subtext">🧬 {sub_text}</div>
         </div>
     """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
-# WELCOME SCREEN
+# WELCOME SCREEN & CORE LOGIC ROUTER
 # ─────────────────────────────────────────────
 if not st.session_state.started:
     st.markdown("""<style>[data-testid="stSidebar"]{display:none!important}</style>""", unsafe_allow_html=True)
+    welcome_container = st.empty()
+    
 
-    st.markdown("""
-    <div class="welcome-wrap">
-        <div class="welcome-badge">📊 PROYEK UAS PEMROGRAMAN AI</div>
-        <div class="welcome-title">Academic Performance<br>Cluster Analyzer</div>
-        <div class="welcome-subtitle">
-            Sistem cerdas berbasis Machine Learning menggunakan algoritma
-            <strong>K-Means Clustering</strong> untuk segmentasi data akademik,
-            pemetaan profil, dan deteksi dini risiko performa mahasiswa.
+    with welcome_container.container():
+        st.markdown("""
+        <div class="welcome-wrap">
+            <div class="welcome-badge">📊 PROYEK UAS PEMROGRAMAN AI</div>
+            <div class="welcome-title">Academic Performance<br>Cluster Analyzer</div>
+            <div class="welcome-subtitle">
+                Sistem cerdas berbasis Machine Learning menggunakan algoritma
+                <strong>K-Means Clustering</strong> untuk segmentasi data akademik,
+                pemetaan profil, dan deteksi dini risiko performa mahasiswa.
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="stat-grid">
-        <div class="stat-card">
-            <div class="icon">📁</div>
-            <div class="slabel">Dataset</div>
-            <div class="sval">300 Mahasiswa · 16 Fitur</div>
+        st.markdown("""
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="icon">📁</div>
+                <div class="slabel">Dataset</div>
+                <div class="sval">300 Mahasiswa · 16 Fitur</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🤖</div>
+                <div class="slabel">Algoritma Inti</div>
+                <div class="sval" style="color:var(--accent) !important;">K-Means Clustering</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🎯</div>
+                <div class="slabel">Target Output</div>
+                <div class="sval" style="color:#10b981 !important;">3 Klaster Akademik</div>
+            </div>
         </div>
-        <div class="stat-card">
-            <div class="icon">🤖</div>
-            <div class="slabel">Algoritma Inti</div>
-            <div class="sval" style="color:var(--accent) !important;">K-Means Clustering</div>
-        </div>
-        <div class="stat-card">
-            <div class="icon">🎯</div>
-            <div class="slabel">Target Output</div>
-            <div class="sval" style="color:#10b981 !important;">3 Klaster Akademik</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns([2, 1.2, 2])
-    with c2:
-        if st.button("Mulai Analisis 🚀", use_container_width=True):
-            st.session_state.started = True
-            st.rerun()
+        c1, c2, c3 = st.columns([2, 1.2, 2])
+        with c2:
+            if st.button("Mulai Analisis 🚀", use_container_width=True):
+                welcome_container.markdown("""
+                    <div class="custom-loader-overlay">
+                        <div class="cube-3d-container">
+                            <div class="cube-3d">
+                                <div class="cube-face front"><span>📝</span><br>KUIS</div>
+                                <div class="cube-face back"><span>📊</span><br>UJIAN</div>
+                                <div class="cube-face left"><span>📅</span><br>ABSEN</div>
+                                <div class="cube-face right"><span>📂</span><br>TUGAS</div>
+                                <div class="cube-face top"><span>📈</span><br>IPK</div>
+                                <div class="cube-face bottom"><span>🤖</span><br>AI ENGINE</div>
+                            </div>
+                        </div>
+                        <div class="loader-text" style="margin-top:40px;">Memuat Modul Komponen AI & Struktur Interface...</div>
+                        <div class="loader-subtext">🧬 LOADING INTERFACE MODULES</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                time.sleep(5) 
+                welcome_container.empty()
+                st.session_state.started = True
+                st.rerun()
 
-    st.markdown("""
-    <div style="max-width:620px;margin:0 auto;">
-        <div class="workflow-row">
-            <span class="workflow-step">1. Unggah CSV</span>
-            <span class="workflow-arrow">→</span>
-            <span class="workflow-step">2. Eksplorasi Cluster</span>
-            <span class="workflow-arrow">→</span>
-            <span class="workflow-step">3. Prediksi Real-Time</span>
+        st.markdown("""
+        <div style="max-width:620px;margin:0 auto;">
+            <div class="workflow-row">
+                <span class="workflow-step">1. Unggah CSV</span>
+                <span class="workflow-arrow">→</span>
+                <span class="workflow-step">2. Eksplorasi Cluster</span>
+                <span class="workflow-arrow">→</span>
+                <span class="workflow-step">3. Prediksi Real-Time</span>
+            </div>
         </div>
-    </div>
-    <div class="welcome-wrap" style="margin-top:0;padding-top:16px;">
-        <div class="welcome-footer">
-            Dibuat oleh: <strong>Stevanus</strong> &nbsp;·&nbsp;
-            NIM: <strong>38250029</strong> &nbsp;·&nbsp;
-            Prodi: <strong>Artificial Intelligence</strong>
+        <div class="welcome-wrap" style="margin-top:0;padding-top:16px;">
+            <div class="welcome-footer">
+                Dibuat oleh: <strong>Stevanus</strong> &nbsp;·&nbsp;
+                NIM: <strong>38250029</strong> &nbsp;·&nbsp;
+                Prodi: <strong>Artificial Intelligence</strong>
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        
     st.stop()
 
 
@@ -609,13 +640,13 @@ FEATURE_META = {
 }
 
 CLUSTER_META = {
-    "Tinggi":   {"label": "🚀 High Achiever",   "color": "#10b981", "bg": "rgba(16,185,129,0.08)", "border": "rgba(16,185,129,0.25)",
+    "Tinggi":   {"label": "🚀 Performa Tinggi",   "color": "#10b981", "bg": "rgba(16,185,129,0.08)", "border": "rgba(16,185,129,0.25)",
                  "saran": "Pertahankan konsistensi! Prospektif menjadi asisten laboratorium atau peer-mentor."},
-    "Menengah": {"label": "📊 Steady Performer", "color": "#f59e0b", "bg": "rgba(245,158,11,0.08)", "border": "rgba(245,158,11,0.25)",
+    "Menengah": {"label": "📊 Performa Stabil", "color": "#f59e0b", "bg": "rgba(245,158,11,0.08)", "border": "rgba(245,158,11,0.25)",
                  "saran": "Optimalkan konsistensi ujian komparatif dan submisi tugas agar menembus klaster utama."},
-    "Berisiko": {"label": "⚠️ Needs Support",    "color": "#ef4444", "bg": "rgba(239,68,68,0.08)", "border": "rgba(239,68,68,0.25)",
-                 "saran": "Perlu bimbingan intensif reguler bersama Penasihat Akademik (PA) sesegera mungkin."},
-    "Override_Berisiko": {"label": "🛑 HARD OVERRIDE: Blacklist", "color": "#ef4444", "bg": "rgba(239,68,68,0.15)", "border": "#ef4444",
+    "Berisiko": {"label": "⚠️ Perlu Bimbingan",    "color": "#ef4444", "bg": "rgba(239,68,68,0.08)", "border": "rgba(239,68,68,0.25)",
+                 "saran": "Perlu bimbingan intensif reguler bersama Penasihat Akademik (PA) sesegera Academic."},
+    "Override_Berisiko": {"label": "🛑 Tidak Layak", "color": "#ef4444", "bg": "rgba(239,68,68,0.15)", "border": "#ef4444",
                  "saran": "OTOMATIS TIDAK MEMENUHI SYARAT KELAYAKAN UJIAN KAMPUS. Angka akumulasi parameter berada di zona batas kritis (0 - 3)."}
 }
 
@@ -673,7 +704,7 @@ with st.sidebar:
         🎓 Academic Cluster AI
       </div>
       <div style='font-size:0.78rem; margin-top:4px; color:var(--text-secondary);'>
-        Stevanus · NIM 38250029<br>Prodi Artificial Intelligence
+        Stevanus - NIM 38250029<br>Prodi Artificial Intelligence
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -685,7 +716,7 @@ with st.sidebar:
     
     # ── CONFIG BOBOT PERSENTASE ──
     st.markdown("<div style='font-size:0.75rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted);'>Kustomisasi Bobot AI</div>", unsafe_allow_html=True)
-    with st.expander("⚙️ Bobot Fitur (Total Wajib 100%)", expanded=False):
+    with st.expander("⚙️ Atur Bobot", expanded=False):
         w_attendance = st.slider("Bobot Absensi & Tugas", 0, 100, 25, 5)
         w_exams = st.slider("Bobot Ujian (UTS/UAS)", 0, 100, 35, 5)
         w_quizzes = st.slider("Bobot Kuis", 0, 100, 20, 5)
@@ -695,17 +726,17 @@ with st.sidebar:
         is_weight_valid = (total_percentage == 100)
         
         if is_weight_valid:
-            st.markdown(f"<div style='color:#10b981; font-weight:bold; font-size:0.85rem; text-align:center;'>✅ Total Alokasi: {total_percentage}%</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='color:#10b981; font-weight:bold; font-size:0.85rem; text-align:center;'>✅ Total Bobot: {total_percentage}%</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='color:#ef4444; font-weight:bold; font-size:0.85rem; text-align:center;'>❌ Total Alokasi: {total_percentage}%<br>(Wajib Berjumlah 100%)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='color:#ef4444; font-weight:bold; font-size:0.85rem; text-align:center;'>❌ Total Bobot: {total_percentage}%<br>(Wajib Berjumlah 100%)</div>", unsafe_allow_html=True)
     
-    # ── DROPDOWN OVERRIDE OTOMATIS / BLACKLIST SYARAT KAMPUS ──
+    #   BLACKLIST SYARAT KAMPUS
     st.divider()
     st.markdown("<div style='font-size:0.75rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted);'>Aturan Akademik Kampus</div>", unsafe_allow_html=True)
-    with st.expander("🛑 Aturan Override Otomatis", expanded=False):
-        is_override_enabled = st.checkbox("Aktifkan Gerbang Blacklist", value=False)
-        override_feature = st.selectbox("Parameter Kunci:", ["lectures_attended", "labs_attended", "assignments_submitted"], format_func=fmt)
-        max_violation_limit = st.number_input("Zona Kritis Batas Bawah (<=):", min_value=0, max_value=20, value=3, step=1, help="Kondisi kritis jika nilai kehadiran berada di angka 0, 1, 2, atau 3.")
+    with st.expander("🛑 Aturan Wajib Kampus", expanded=False):
+        is_override_enabled = st.checkbox("Aktifkan", value=False)
+        override_feature = st.selectbox("Parameter:", ["lectures_attended", "labs_attended", "assignments_submitted"], format_func=fmt)
+        max_violation_limit = st.number_input("Batas Wajib (<=):", min_value=0, max_value=20, value=3, step=1, help="Kondisi tidak layak jika nilai kehadiran berada di angka kurang dari atau sama dengan nilai yang ditentukan.")
 
     st.divider()
     st.markdown("<div style='font-size:0.75rem; margin-bottom:8px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted);'>Upload Dataset</div>", unsafe_allow_html=True)
@@ -719,7 +750,7 @@ with st.sidebar:
 
 
 # ─────────────────────────────────────────────
-# 5. DATA LOADING & CLUSTERING WITH FIXED OVERRIDE LOGIC
+# 5. DATA LOADING & CLUSTERING FUNCTIONS
 # ─────────────────────────────────────────────
 @st.cache_data
 def load_and_preprocess(file_obj):
@@ -732,7 +763,7 @@ def load_and_preprocess(file_obj):
     return df
 
 def run_clustering_with_weights(df_json, features, w_att, w_ex, w_qz, w_gp, override_active, ov_feat, ov_limit):
-    df = pd.read_json(df_json)
+    df = pd.read_json(io.StringIO(df_json))
     data = df[list(features)].fillna(df[list(features)].mean())
     
     scaler = StandardScaler()
@@ -763,7 +794,7 @@ def run_clustering_with_weights(df_json, features, w_att, w_ex, w_qz, w_gp, over
     rank_map = {scores.index[0]: "Tinggi", scores.index[1]: "Menengah", scores.index[2]: "Berisiko"}
     df2['Kategori'] = df2['_cluster'].map(rank_map)
     
-    # Gerbang Blacklist 0, 1, 2, 3 Langsung Masuk Zona Bahaya
+    # Blacklist Override Logic
     if override_active:
         for idx, row in df2.iterrows():
             if ov_feat in df2.columns:
@@ -795,188 +826,205 @@ if menu == "📊 Dashboard Analisis":
         st.warning("⚠️ Analisis Dashboard dikunci. Silakan sesuaikan Bobot Fitur di sidebar agar berjumlah pas 100%.")
         st.stop()
 
-    # ANIMASI 1: Loading berkas data set baru (3 Detik)
     placeholder_load = st.empty()
     with placeholder_load:
-        academic_loading_screen("Membaca Dataset & Membersihkan Inkonsistensi Data...", "INGESTING DATASET")
+        academic_loading_screen("Menjalankan Standardisasi Data & Pemetaan Klaster K-Means...", "PROSES SEGMENTASI PROFIL MAHASISWA")
         df_raw = load_and_preprocess(uploaded_file)
-        time.sleep(3.0)
+        time.sleep(2.0)
     placeholder_load.empty()
 
     available = [f for f in ALL_FEATURES if f in df_raw.columns]
 
-    st.markdown("<div class='section-title'>🎛️ Konfigurasi Sumbu Visualisasi</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>🎛️ Konfigurasi Sumbu Parameter</div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
         default_x_idx = available.index('lectures_attended') if 'lectures_attended' in available else 0
-        x_axis = st.selectbox("Sumbu X Grafik:", options=available, index=default_x_idx, format_func=fmt, key="x")
+        x_axis = st.selectbox("Parameter Sumbu X :", options=available, index=default_x_idx, format_func=fmt, key="x")
     with c2:
-        y_axis = st.selectbox("Sumbu Y Grafik:", options=available,
+        y_axis = st.selectbox("Parameter Sumbu Y :", options=available,
             index=available.index('final_marks') if 'final_marks' in available else 1,
             format_func=fmt, key="y")
 
     if x_axis == y_axis:
-        st.error("⚠️ Sumbu X dan Y tidak boleh sama. Pilih parameter yang berbeda.")
+        st.error("⚠️ Parameter Sumbu X dan Y tidak boleh sama. Pilih parameter yang berbeda.")
         st.stop()
 
     cluster_features = [x_axis, y_axis]
     
-    # ANIMASI 2: Loading ubah koordinat sumbu (3 Detik)
     placeholder_axis = st.empty()
     with placeholder_axis:
-        academic_loading_screen("Mengonfigurasi Matriks Ruang Fitur & Koordinat...", "RE-INDEXING AXIS COMPONENT")
+        academic_loading_screen("Menghitung Jarak Euclidean & Memeriksa Aturan Batas Kritis Kampus...", "PROSES INFERENSI & KLASIFIKASI AI")
         df_clustered, sil_score, _, _ = run_clustering_with_weights(
             df_raw.to_json(), cluster_features, w_attendance, w_exams, w_quizzes, w_gpa,
             is_override_enabled, override_feature, max_violation_limit
         )
-        time.sleep(3.0)
+        time.sleep(2.0)
     placeholder_axis.empty()
 
-    # ── Metric cards ──
-    st.markdown("---")
-    total = len(df_clustered)
-    counts = df_clustered['Kategori'].value_counts()
-    accent_color = st.get_option("theme.primaryColor") or "#38bdf8"
+    if 'df_clustered' in locals() or 'df_clustered' in globals():
 
-    mc1, mc2, mc3, mc4 = st.columns(4)
-    with mc1:
-        st.markdown(metric_card_html("Total Mahasiswa", total, f"file: {uploaded_file.name}", accent_color), unsafe_allow_html=True)
-    with mc2:
-        st.markdown(cluster_card_html("Tinggi",   counts.get("Tinggi",0),   counts.get("Tinggi",0)/total*100), unsafe_allow_html=True)
-    with mc3:
-        st.markdown(cluster_card_html("Menengah", counts.get("Menengah",0), counts.get("Menengah",0)/total*100), unsafe_allow_html=True)
-    with mc4:
-        total_risk_pop = counts.get("Berisiko",0) + counts.get("Override_Berisiko",0)
-        st.markdown(cluster_card_html("Berisiko", total_risk_pop, total_risk_pop/total*100), unsafe_allow_html=True)
-
-    if counts.get("Override_Berisiko", 0) > 0:
-        st.error(f"🛑 **Sistem Keamanan Akademik Mendeteksi:** Sebanyak **{counts.get('Override_Berisiko')} Mahasiswa** otomatis masuk status Blacklist karena angka kehadiran berada di batas kritis (0 - {int(max_violation_limit)})!")
-
-    st.markdown(f"""
-    <div class="sil-callout">
-        Silhouette Score Model Terbobot ({total_percentage}%): <strong style="color:{accent_color};">{sil_score:.4f}</strong>
-    </div>""", unsafe_allow_html=True)
-
-    # ── Charts & Tab Layout ──
-    st.markdown("---")
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📍 Scatter Plot", 
-        "🥧 Distribusi Kelompok", 
-        "📊 Statistik per Kelompok", 
-        "📈 Validasi Optimalisasi K",
-        "🧠 Vektor Pengaruh (XAI Global)"
-    ])
-
-    df_clustered['Label'] = df_clustered['Kategori'].apply(lambda x: CLUSTER_META.get(x, CLUSTER_META["Berisiko"])['label'])
-    color_map = {CLUSTER_META[k]['label']: CLUSTER_META[k]['color'] for k in CLUSTER_META}
-    
-    is_light = st.get_option("theme.base") == "light" or st.get_option("theme.backgroundColor") == "#ffffff"
-    dot_border = "#ffffff" if is_light else "#0d1117"
-    PT = get_plotly_theme()
-
-    with tab1:
-        fig = px.scatter(df_clustered, x=x_axis, y=y_axis, color="Label",
-            color_discrete_map=color_map,
-            hover_data=["name"] if "name" in df_clustered.columns else None,
-            labels={x_axis: fmt(x_axis), y_axis: fmt(y_axis)},
-            title=f"Sebaran Mahasiswa: {fmt(x_axis)} vs {fmt(y_axis)}",
-            template="none", opacity=0.85)
-        fig.update_traces(marker=dict(size=8, line=dict(width=0.6, color=dot_border)))
-        fig.update_layout(**PT, height=430,
-            legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0))
-        st.plotly_chart(fig, use_container_width=True, key=f"scatter_{x_axis}_{y_axis}")
-
+        # Metric cards 
         st.markdown("---")
-        st.markdown("<div class='section-title'>🗂️ Tabel Data Mahasiswa & Hasil Cluster</div>", unsafe_allow_html=True)
-        show_cols = (['name'] if 'name' in df_clustered.columns else []) + ['Kategori', 'Label'] + available
-        show_cols = [c for c in show_cols if c in df_clustered.columns]
-        filter_cat = st.selectbox("Filter Kelompok", ["Semua", "Tinggi", "Menengah", "Berisiko", "Override_Berisiko"], key="filter_table")
-        tbl = df_clustered[show_cols] if filter_cat == "Semua" else df_clustered[df_clustered['Kategori'] == filter_cat][show_cols]
-        st.dataframe(tbl.reset_index(drop=True), use_container_width=True, height=300)
+        total = len(df_clustered)
+        counts = df_clustered['Kategori'].value_counts()
+        accent_color = st.get_option("theme.primaryColor") or "#38bdf8"
 
-    with tab2:
-        col_pie, col_bar = st.columns(2)
-        with col_pie:
-            pie_df = df_clustered['Label'].value_counts().reset_index()
-            pie_df.columns = ['Kelompok', 'Jumlah']
-            fig_pie = px.pie(pie_df, names="Kelompok", values="Jumlah",
-                color="Kelompok", color_discrete_map=color_map, hole=0.52, template="none")
-            fig_pie.update_traces(textfont_size=13, marker=dict(line=dict(color=dot_border, width=2)))
-            fig_pie.update_layout(**PT, height=360,
-                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
-            st.plotly_chart(fig_pie, use_container_width=True, key=f"pie_{x_axis}_{y_axis}")
+        has_override = "Override_Berisiko" in counts and counts["Override_Berisiko"] > 0
 
-        with col_bar:
-            clean_stat_df = df_clustered.copy()
-            clean_stat_df['Kategori'] = clean_stat_df['Kategori'].replace("Override_Berisiko", "Berisiko")
-            bar_df = clean_stat_df.groupby('Kategori')[available].mean().reset_index()
-            bar_melt = bar_df.melt(id_vars='Kategori', var_name='Fitur', value_name='Rata-rata')
-            bar_melt['Fitur'] = bar_melt['Fitur'].apply(fmt)
-            bar_melt['Label'] = bar_melt['Kategori'].apply(lambda x: CLUSTER_META[x]['label'])
-            fig_bar = px.bar(bar_melt, x='Fitur', y='Rata-rata', color='Label',
-                barmode='group', template="none", color_discrete_map=color_map,
-                title="Rata-rata Fitur per Kelompok")
-            fig_bar.update_layout(**PT, height=360, xaxis_tickangle=-35,
+        if has_override:
+            mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+            with mc1:
+                st.markdown(metric_card_html("Total Mahasiswa", total, f"file: {uploaded_file.name}", accent_color), unsafe_allow_html=True)
+            with mc2:
+                st.markdown(cluster_card_html("Tinggi", counts.get("Tinggi", 0), counts.get("Tinggi", 0)/total*100), unsafe_allow_html=True)
+            with mc3:
+                st.markdown(cluster_card_html("Menengah", counts.get("Menengah", 0), counts.get("Menengah", 0)/total*100), unsafe_allow_html=True)
+            with mc4:
+                st.markdown(cluster_card_html("Berisiko", counts.get("Berisiko", 0), counts.get("Berisiko", 0)/total*100), unsafe_allow_html=True)
+            with mc5:
+                st.markdown(cluster_card_html("Override_Berisiko", counts.get("Override_Berisiko", 0), counts.get("Override_Berisiko", 0)/total*100), unsafe_allow_html=True)
+        else:
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            with mc1:
+                st.markdown(metric_card_html("Total Mahasiswa", total, f"file: {uploaded_file.name}", accent_color), unsafe_allow_html=True)
+            with mc2:
+                st.markdown(cluster_card_html("Tinggi", counts.get("Tinggi", 0), counts.get("Tinggi", 0)/total*100), unsafe_allow_html=True)
+            with mc3:
+                st.markdown(cluster_card_html("Menengah", counts.get("Menengah", 0), counts.get("Menengah", 0)/total*100), unsafe_allow_html=True)
+            with mc4:
+                st.markdown(cluster_card_html("Berisiko", counts.get("Berisiko", 0), counts.get("Berisiko", 0)/total*100), unsafe_allow_html=True)
+
+        if counts.get("Override_Berisiko", 0) > 0:
+            st.error(f"🛑 **Sistem Mendeteksi:** Sebanyak **{counts.get('Override_Berisiko')} Mahasiswa** otomatis masuk status Tidak Layak karena angka berada di bawah (0 - {int(max_violation_limit)})!")
+
+        # Charts & Tab Layout 
+        st.markdown("---")
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📍 Visualisasi Data", 
+            "🥧 Proporsi & Karakteristik", 
+            "📊 Detail Deskriptif Nilai", 
+            "📈 Pengujian Cluster",
+            "🧠 Signifikansi Fitur (XAI)"
+        ])
+
+        df_clustered['Label'] = df_clustered['Kategori'].apply(lambda x: CLUSTER_META.get(x, CLUSTER_META["Berisiko"])['label'])
+        color_map = {CLUSTER_META[k]['label']: CLUSTER_META[k]['color'] for k in CLUSTER_META}
+        
+        is_light = st.get_option("theme.base") == "light" or st.get_option("theme.backgroundColor") == "#ffffff"
+        dot_border = "#ffffff" if is_light else "#0d1117"
+        PT = get_plotly_theme()
+
+        with tab1:
+            fig = px.scatter(df_clustered, x=x_axis, y=y_axis, color="Label",
+                color_discrete_map=color_map,
+                hover_data=["name"] if "name" in df_clustered.columns else None,
+                labels={x_axis: fmt(x_axis), y_axis: fmt(y_axis)},
+                title=f"Sebaran Mahasiswa: {fmt(x_axis)} vs {fmt(y_axis)}",
+                template="none", opacity=0.85)
+            fig.update_traces(marker=dict(size=8, line=dict(width=0.6, color=dot_border)))
+            fig.update_layout(**PT, height=430,
                 legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0))
-            st.plotly_chart(fig_bar, use_container_width=True, key=f"bar_{x_axis}_{y_axis}")
+            st.plotly_chart(fig, use_container_width=True, key=f"scatter_{x_axis}_{y_axis}")
 
-    with tab3:
-        stat_df = df_clustered.groupby('Kategori')[available].agg(['mean','min','max']).round(2)
-        stat_df.columns = [f"{col[1].upper()} {fmt(col[0])}" for col in stat_df.columns]
-        st.dataframe(stat_df, use_container_width=True)
-
-    with tab4:
-        st.markdown("<div class='section-title'>📉 Pembuktian Penentuan Centroid via Elbow Method</div>", unsafe_allow_html=True)
-        data_ev = df_raw[available].fillna(df_raw[available].mean())
-        scaled_ev = StandardScaler().fit_transform(data_ev)
-        
-        inertias = []
-        silhouettes = []
-        k_list = list(range(2, 8))
-        for k_val in k_list:
-            km_test = KMeans(n_clusters=k_val, random_state=42, n_init=5).fit(scaled_ev)
-            inertias.append(km_test.inertia_)
-            silhouettes.append(silhouette_score(scaled_ev, km_test.labels_))
+            st.markdown("---")
+            st.markdown("<div class='section-title'>🗂️ Tabel Data Mahasiswa & Hasil Cluster</div>", unsafe_allow_html=True)
+            show_cols = (['name'] if 'name' in df_clustered.columns else []) + ['Kategori', 'Label'] + available
+            show_cols = [c for c in show_cols if c in df_clustered.columns]
             
-        c_el1, c_el2 = st.columns(2)
-        with c_el1:
-            fig_el = go.Figure(data=go.Scatter(x=k_list, y=inertias, mode='lines+markers', line=dict(color=accent_color, width=3)))
-            fig_el.add_vline(x=3, line_dash="dash", line_color="#ef4444", annotation_text="K Pilihan = 3")
-            fig_el.update_layout(**PT, title="Grafik Elbow (Inertia Berkala)", height=320, xaxis_title="Jumlah Cluster (k)", yaxis_title="Inertia / WCSS")
-            st.plotly_chart(fig_el, use_container_width=True)
-        with c_el2:
-            fig_sil = go.Figure(data=go.Scatter(x=k_list, y=silhouettes, mode='lines+markers', line=dict(color="#10b981", width=3)))
-            fig_sil.add_vline(x=3, line_dash="dash", line_color="#ef4444", annotation_text="K Tertinggi = 3")
-            fig_sil.update_layout(**PT, title="Grafik Silhouette Score", height=320, xaxis_title="Jumlah Cluster (k)", yaxis_title="Silhouette Score")
-            st.plotly_chart(fig_sil, use_container_width=True)
+            filter_options = {
+                "Semua": "Semua",
+                "Tinggi": "Tinggi",
+                "Stabil": "Menengah",
+                "Perlu Bimbingan": "Berisiko",
+                "Tidak Layak": "Override_Berisiko"
+            }
+            
+            filter_cat = st.selectbox("Filter Kelompok", list(filter_options.keys()), key="filter_table")
+            internal_cat = filter_options[filter_cat]
+            
+            tbl = df_clustered[show_cols] if filter_cat == "Semua" else df_clustered[df_clustered['Kategori'] == internal_cat][show_cols]
+            st.dataframe(tbl.reset_index(drop=True), use_container_width=True, height=300)
 
-    with tab5:
-        st.markdown("<div class='section-title'>🧠 Explainable AI (XAI): Fitur Paling Berpengaruh secara Global</div>", unsafe_allow_html=True)
-        data_xai = df_raw[available].fillna(df_raw[available].mean())
-        scaled_xai = StandardScaler().fit_transform(data_xai)
-        
-        km_xai = KMeans(n_clusters=3, random_state=42, n_init=10)
-        labels_xai = km_xai.fit_predict(scaled_xai)
-        
-        rf_proxy = RandomForestClassifier(n_estimators=50, random_state=42)
-        rf_proxy.fit(scaled_xai, labels_xai)
-        result_xai = permutation_importance(rf_proxy, scaled_xai, labels_xai, n_repeats=5, random_state=42)
-        
-        importance_df = pd.DataFrame({
-            'Fitur': [fmt(f) for f in available],
-            'Bobot Pengaruh': result_xai.importances_mean
-        }).sort_values(ascending=True, by='Bobot Pengaruh')
-        
-        fig_xai = px.bar(importance_df, x='Bobot Pengaruh', y='Fitur', orientation='h', template='none')
-        
-        # ── FIX SOLUSI: Mendefinisikan is_dark_global lokal secara presisi di Tab 5 agar lolos dari NameError ──
-        is_dark_global = st.get_option("theme.base") == "dark" or st.get_option("theme.backgroundColor") != "#ffffff"
-        colorscale_fixed = "RdBu_r" if not is_dark_global else [[0,"#1a5fa8"],[0.5,"#21262d"],[1,"#a83220"]]
-        
-        fig_xai.update_traces(marker_color='#38bdf8', marker_line_color=dot_border, marker_line_width=0.5)
-        fig_xai.update_layout(**PT, height=400, title="Tingkat Sensitivitas Matriks terhadap Penentuan Klaster Global",
-                              xaxis_title="Skor Signifikansi Vektor (Permutation Importance)", yaxis_title="")
-        st.plotly_chart(fig_xai, use_container_width=True)
+        with tab2:
+            col_pie, col_bar = st.columns(2)
+            with col_pie:
+                pie_df = df_clustered['Label'].value_counts().reset_index()
+                pie_df.columns = ['Kelompok', 'Jumlah']
+                fig_pie = px.pie(pie_df, names="Kelompok", values="Jumlah",
+                    color="Kelompok", color_discrete_map=color_map, hole=0.52, template="none")
+                fig_pie.update_traces(textfont_size=13, marker=dict(line=dict(color=dot_border, width=2)))
+                fig_pie.update_layout(**PT, height=360,
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
+                st.plotly_chart(fig_pie, use_container_width=True, key=f"pie_{x_axis}_{y_axis}")
+
+            with col_bar:
+                bar_df = df_clustered.groupby('Label')[available].mean().reset_index()
+                bar_melt = bar_df.melt(id_vars='Label', var_name='Fitur', value_name='Rata-rata')
+                bar_melt['Fitur'] = bar_melt['Fitur'].apply(fmt)
+                
+                fig_bar = px.bar(bar_melt, x='Fitur', y='Rata-rata', color='Label',
+                    barmode='group', template="none", color_discrete_map=color_map,
+                    title="Rata-rata Fitur per Kelompok (Up to Date)")
+                fig_bar.update_layout(**PT, height=360, xaxis_tickangle=-35,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0))
+                st.plotly_chart(fig_bar, use_container_width=True, key=f"bar_{x_axis}_{y_axis}")
+
+        with tab3:
+            stat_df = df_clustered.groupby('Kategori')[available].agg(['mean','min','max']).round(2)
+            stat_df.columns = [f"{col[1].upper()} {fmt(col[0])}" for col in stat_df.columns]
+            st.dataframe(stat_df, use_container_width=True)
+
+        with tab4:
+            st.markdown("<div class='section-title'>📉 Penentuan Centroid via Elbow & Silhouette Score</div>", unsafe_allow_html=True)
+            data_ev = df_raw[available].fillna(df_raw[available].mean())
+            scaled_ev = StandardScaler().fit_transform(data_ev)
+            
+            inertias = []
+            silhouettes = []
+            k_list = list(range(2, 8))
+            for k_val in k_list:
+                km_test = KMeans(n_clusters=k_val, random_state=42, n_init=5).fit(scaled_ev)
+                inertias.append(km_test.inertia_)
+                silhouettes.append(silhouette_score(scaled_ev, km_test.labels_))
+                
+            c_el1, c_el2 = st.columns(2)
+            with c_el1:
+                fig_el = go.Figure(data=go.Scatter(x=k_list, y=inertias, mode='lines+markers', line=dict(color=accent_color, width=3)))
+                fig_el.add_vline(x=3, line_dash="dash", line_color="#ef4444", annotation_text="K Pilihan = 3")
+                fig_el.update_layout(**PT, title="Grafik Elbow", height=320, xaxis_title="Jumlah Cluster (k)", yaxis_title="Inertia / WCSS")
+                st.plotly_chart(fig_el, use_container_width=True)
+            with c_el2:
+                fig_sil = go.Figure(data=go.Scatter(x=k_list, y=silhouettes, mode='lines+markers', line=dict(color="#10b981", width=3)))
+                fig_sil.add_vline(x=3, line_dash="dash", line_color="#ef4444", annotation_text="K Tertinggi = 3")
+                fig_sil.update_layout(**PT, title="Grafik Silhouette Score", height=320, xaxis_title="Jumlah Cluster (k)", yaxis_title="Silhouette Score")
+                st.plotly_chart(fig_sil, use_container_width=True)
+
+        with tab5:
+            st.markdown("<div class='section-title'>🧠 Explainable AI (XAI): Fitur Paling Berpengaruh secara Global</div>", unsafe_allow_html=True)
+            data_xai = df_raw[available].fillna(df_raw[available].mean())
+            scaled_xai = StandardScaler().fit_transform(data_xai)
+            
+            km_xai = KMeans(n_clusters=3, random_state=42, n_init=10)
+            labels_xai = km_xai.fit_predict(scaled_xai)
+            
+            rf_proxy = RandomForestClassifier(n_estimators=50, random_state=42)
+            rf_proxy.fit(scaled_xai, labels_xai)
+            result_xai = permutation_importance(rf_proxy, scaled_xai, labels_xai, n_repeats=5, random_state=42)
+            
+            importance_df = pd.DataFrame({
+                'Fitur': [fmt(f) for f in available],
+                'Bobot Pengaruh': result_xai.importances_mean
+            }).sort_values(ascending=True, by='Bobot Pengaruh')
+            
+            fig_xai = px.bar(importance_df, x='Bobot Pengaruh', y='Fitur', orientation='h', template='none')
+            
+            is_dark_global = st.get_option("theme.base") == "dark" or st.get_option("theme.backgroundColor") != "#ffffff"
+            colorscale_fixed = "RdBu_r" if not is_dark_global else [[0,"#1a5fa8"],[0.5,"#21262d"],[1,"#a83220"]]
+            
+            fig_xai.update_traces(marker_color='#38bdf8', marker_line_color=dot_border, marker_line_width=0.5)
+            fig_xai.update_layout(**PT, height=400, title="Tingkat Sensitivitas Matriks terhadap Penentuan Klaster Global",
+                                  xaxis_title="Skor Signifikansi Vektor", yaxis_title="")
+            st.plotly_chart(fig_xai, use_container_width=True)
 
 
 # ─────────────────────────────────────────────
@@ -985,7 +1033,7 @@ if menu == "📊 Dashboard Analisis":
 elif menu == "🔍 Prediksi Individu":
     st.markdown("""
     <div class='page-header'>
-      <h1>Prediksi Mahasiswa Baru & Analisis Komparatif</h1>
+      <h1>Prediksi Mahasiswa Baru & Perbandingan Mahasiswa</h1>
       <p>Masukkan data akademik mahasiswa untuk mendapatkan prediksi kelompok performa secara real-time</p>
     </div>""", unsafe_allow_html=True)
 
@@ -1006,10 +1054,10 @@ elif menu == "🔍 Prediksi Individu":
     )
 
     st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
-    is_compare_mode = st.toggle("👥 Aktifkan Mode Komparasi Dua Mahasiswa (Side-by-Side)", value=False)
+    is_compare_mode = st.toggle("👥 Atifkan Mode Perbandingan Mahasiswa", value=False)
 
     if not is_compare_mode:
-        st.markdown("<div class='section-title'>✍️ Input Data Mahasiswa</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>✍️ Data Mahasiswa</div>", unsafe_allow_html=True)
         cols_left, cols_right = st.columns(2)
         input_vals = {}
 
@@ -1062,12 +1110,9 @@ elif menu == "🔍 Prediksi Individu":
     st.markdown("---")
     
     if st.button("🔍 Prediksi Kelompok", type="primary", use_container_width=True):
-        
-        # ANIMASI 3: Fullscreen Loading 3 Detik
         placeholder_predict = st.empty()
         with placeholder_predict:
-            academic_loading_screen("Menghitung Jarak Centroid & Inferensi Aturan Akademik...", "RUNNING OVERRIDE GATE & K-MEANS ENGINE")
-            
+            academic_loading_screen("Menghitung Kedekatan Vektor & Memeriksa Syarat Kelayakan Akademik...", "PROSES KLASIFIKASI & DETEKSI DINI AI")
             all_data = df_raw[available].fillna(df_raw[available].mean())
             
             f_att = w_attendance / 100.0
@@ -1103,7 +1148,6 @@ elif menu == "🔍 Prediksi Individu":
             pred = km.predict(scaled_input_df.values)[0]
             kategori = rank_map[pred]
             
-            # Gerbang Blacklist 0, 1, 2, 3 Langsung Masuk Zona Bahaya (Mahasiswa A)
             hit_blacklist_a = False
             if is_override_enabled and (override_feature in input_vals):
                 if input_vals[override_feature] <= max_violation_limit:
@@ -1125,7 +1169,6 @@ elif menu == "🔍 Prediksi Individu":
                 pred_b = km.predict(scaled_input_df_b.values)[0]
                 kategori_b = rank_map[pred_b]
                 
-                # Gerbang Blacklist 0, 1, 2, 3 Langsung Masuk Zona Bahaya (Mahasiswa B)
                 hit_blacklist_b = False
                 if is_override_enabled and (override_feature in input_vals_b):
                     if input_vals_b[override_feature] <= max_violation_limit:
@@ -1133,8 +1176,8 @@ elif menu == "🔍 Prediksi Individu":
                 
                 if hit_blacklist_b: kategori_b = "Override_Berisiko"
                 m_b = CLUSTER_META.get(kategori_b, CLUSTER_META["Berisiko"])
-                
-            time.sleep(3.0)
+
+            time.sleep(2.0)
         placeholder_predict.empty()
 
         # ─────────────────────────────────────────────
@@ -1145,7 +1188,7 @@ elif menu == "🔍 Prediksi Individu":
                 advice_html = f"<div style='margin-top:12px; padding:12px; background:rgba(239,68,68,0.1); border-radius:8px; border-left:4px solid #ef4444;'>"
                 advice_html += f"<div style='font-size:0.85rem; font-weight:700; color:#f87171; margin-bottom:4px;'>❌ Pemulihan Status Kunci:</div>"
                 advice_html += f"<p style='margin:0; font-size:0.8rem; color:var(--text-secondary);'>Sistem mendeteksi nilai parameter berada di rentang kritis bawah (0 - {int(max_violation_limit)}). Naikkan parameter kelayakan absensi/tugas Anda terlebih dahulu.</p></div>"
-                return advice_html, "STATUS: Terkunci Blacklist Aturan Absensi Kampus.\n"
+                return advice_html, "STATUS: Blacklist Aturan Wajib Kampus.\n"
                 
             rank_order = ["Berisiko", "Menengah", "Tinggi"]
             try:
@@ -1214,7 +1257,7 @@ elif menu == "🔍 Prediksi Individu":
                     {improvement_b if improvement_b else ""}
                 </div>""", unsafe_allow_html=True)
 
-        # ── DOWNLOAD LAPORAN HASIL PREDIKSI (.TXT) ──
+        # DOWNLOAD LAPORAN HASIL PREDIKSI (.TXT) 
         st.markdown("<div style='margin-top:14px;'></div>", unsafe_allow_html=True)
         
         report_data = "========================================================\n"
@@ -1222,9 +1265,9 @@ elif menu == "🔍 Prediksi Individu":
         report_data += "========================================================\n\n"
         report_data += f"Konfigurasi Bobot Akademik: Absen={w_attendance}% | Ujian={w_exams}% | Kuis={w_quizzes}% | IPK={w_gpa}%\n"
         if is_override_enabled:
-            report_data += f"Aturan Gerbang Blacklist: AKTIF (Maks Batas Kritis Fitur [{override_feature}] <= {max_violation_limit})\n\n"
+            report_data += f"Aturan Blacklist: AKTIF (Maks Batas Kritis Fitur [{override_feature}] <= {max_violation_limit})\n\n"
         else:
-            report_data += "Aturan Gerbang Blacklist: NON-AKTIF\n\n"
+            report_data += "Aturan Blacklist: NON-AKTIF\n\n"
             
         if not is_compare_mode:
             report_data += f"Hasil Prediksi: {kategori}\n"
@@ -1292,7 +1335,7 @@ elif menu == "🔍 Prediksi Individu":
             title="Profil Geometris Kedekatan Titik Vektor Terhadap Centroid Klaster")
         st.plotly_chart(fig_radar, use_container_width=True)
 
-        # ── BLOK INTERPRETASI OTOMATIS ──
+        # BLOK INTERPRETASI HASIL PREDIKSI 
         dim_length = len(available)
         with st.container():
             st.markdown('<div class="interpretation-box">', unsafe_allow_html=True)
@@ -1380,7 +1423,7 @@ elif menu == "📁 Info Dataset":
         ("total_lectures",        "Total sesi kuliah yang dijadwalkan",          "Integer"),
         ("lectures_attended",     "Jumlah sesi kuliah yang dihadiri",            "Integer"),
         ("total_lab_sessions",    "Total sesi praktikum yang dijadwalkan",       "Integer"),
-        ("labs_attended",         "Jumlah sesi praktikum yang dihadiri",         "Integer"),
+        ("labs_attended",         "Jumlah sesi praktikum yang dihadiri",            "Integer"),
     ]
     attr_df = pd.DataFrame(attr_data, columns=["Atribut", "Deskripsi", "Tipe Data"])
     st.dataframe(attr_df, use_container_width=True, hide_index=True, height=480)
