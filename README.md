@@ -36,10 +36,3 @@ Dataset yang digunakan berasal dari Kaggle (*student_dropout_behavior_dataset.cs
 * **Matriks Kehadiran & Tugas:** `lectures_attended`, `labs_attended`, `assignments_submitted`.
 
 ---
-
-## 🛠️ Cara Menjalankan Aplikasi Secara Lokal
-
-### 1. Kloning Repositori
-```bash
-git clone [https://github.com/username-kamu/nama-repositori.git](https://github.com/username-kamu/nama-repositori.git)
-cd nama-repositori
